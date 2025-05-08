@@ -21,24 +21,30 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '9.0.x' # 你可以根据你的项目指定 .NET 版本
+        dotnet-version: '9.0.x'
 
     - name: Build and publish for win-x64
       run: dotnet publish DNSSpeedTester.csproj -c Release -r win-x64 --output ./publish-x64
 
+    - name: Rename win-x64 executable
+      run: ren publish-x64\DNSSpeedTester.exe DNSSpeedTester-x64.exe
+      
     - name: Archive win-x64 artifact
       uses: actions/upload-artifact@v4
       with:
-        name: DNSSpeedTester-win-x64
+        name: DNSSpeedTester-win-x64-files
         path: ./publish-x64
 
     - name: Build and publish for win-x86
       run: dotnet publish DNSSpeedTester.csproj -c Release -r win-x86 --output ./publish-x86
 
+    - name: Rename win-x86 executable
+      run: ren publish-x86\DNSSpeedTester.exe DNSSpeedTester-x86.exe
+
     - name: Archive win-x86 artifact
       uses: actions/upload-artifact@v4
       with:
-        name: DNSSpeedTester-win-x86
+        name: DNSSpeedTester-win-x86-files
         path: ./publish-x86
 
     - name: Create Release and Upload Assets
@@ -46,5 +52,4 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ./publish-x64/*.exe
-          ./publish-x86/*.exe
+          ./publish-*/*.exe
