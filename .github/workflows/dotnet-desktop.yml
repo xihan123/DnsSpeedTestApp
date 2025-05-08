@@ -46,5 +46,5 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ./publish-x64/*
-          ./publish-x86/*
+          ./publish-x64/*.exe
+          ./publish-x86/*.exe
