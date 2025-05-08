@@ -1,0 +1,50 @@
+name: .NET Publish and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # 当匹配 'v*.*.*' 格式的标签被推送时触发
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: windows-latest # 使用 Windows 环境
+
+    permissions:
+      contents: write # 需要写入权限来创建 Release 和上传构建产物
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x' # 你可以根据你的项目指定 .NET 版本
+
+    - name: Build and publish for win-x64
+      run: dotnet publish DNSSpeedTester.csproj -c Release -r win-x64 --output ./publish-x64
+
+    - name: Archive win-x64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DNSSpeedTester-win-x64
+        path: ./publish-x64
+
+    - name: Build and publish for win-x86
+      run: dotnet publish DNSSpeedTester.csproj -c Release -r win-x86 --output ./publish-x86
+
+    - name: Archive win-x86 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DNSSpeedTester-win-x86
+        path: ./publish-x86
+
+    - name: Create Release and Upload Assets
+      if: startsWith(github.ref, 'refs/tags/') # 仅当事件是标签推送时执行
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          ./publish-x64/*
+          ./publish-x86/*
