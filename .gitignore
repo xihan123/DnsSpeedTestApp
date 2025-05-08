@@ -1,0 +1,38 @@
+# 忽略Rider生成的文件
+.run/
+riderModule.iml
+/_ReSharper.Caches/
+
+# 忽略所有编译输出目录
+bin/
+obj/
+
+# 忽略Visual Studio生成的用户特定文件
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# 忽略Visual Studio项目文件中的临时文件
+**/*.csproj.user
+**/*.csproj.vspscc
+**/*.vssscc
+
+# 忽略NuGet包缓存
+packages/
+
+# 忽略Visual Studio Code生成的文件
+.vscode/
+.idea/
+.vs/
+*.code-workspace
+
+# 忽略操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 忽略日志文件
+*.log
+
+# 忽略测试结果文件
+TestResults/

@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net9.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UseWPF>true</UseWPF>
+
+
+        <!--启用单文件发布-->
+        <PublishSingleFile>true</PublishSingleFile>
+        <!--捆绑运行时-->
+        <SelfContained>false</SelfContained>
+        <!--指定运行时标识符-->
+        <!--        <RuntimeIdentifier>win-x64</RuntimeIdentifier>-->
+        <!--启用ReadyToRun-->
+        <!--        <PublishReadyToRun>true</PublishReadyToRun>-->
+
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="DnsClient" Version="1.8.0"/>
+        <PackageReference Include="MaterialDesignColors" Version="5.2.1"/>
+        <PackageReference Include="MaterialDesignThemes" Version="5.2.1"/>
+        <PackageReference Include="System.Management" Version="9.0.4"/>
+        <PackageReference Include="System.Text.Json" Version="9.0.4">
+            <TreatAsUsed>true</TreatAsUsed>
+        </PackageReference>
+        <ExcludeFromSingleFile Include="*.pdb"/>
+        <ExcludeFromSingleFile Include="*.xml"/>
+    </ItemGroup>
+
+</Project>
