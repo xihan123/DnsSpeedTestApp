@@ -4,6 +4,10 @@
 **日期：** 2025-05-08  
 **作者：** xihan123
 
+# 本项目 CDN 加速及安全防护由 Tencent EdgeOne 赞助
+
+[![EdgeOne](https://edgeone.ai/media/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png)](https://edgeone.ai/zh?from=github)
+
 ## 目录
 
 1. [项目介绍](#1-项目介绍)
