@@ -104,6 +104,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Grid.Column="0" Text="网络适配器:" VerticalAlignment="Center" Margin="0,0,16,0" />
@@ -143,14 +144,28 @@
                                 <TextBlock Text="恢复 DHCP" />
                             </StackPanel>
                         </Button>
+
+                        <Button Grid.Column="5"
+                                Command="{Binding SelfCheckCommand}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                ToolTip="QUIC/DoQ 自检"
+                                Margin="8,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="ShieldCheck" Margin="0,0,8,0" />
+                                <TextBlock Text="QUIC 自检" />
+                            </StackPanel>
+                        </Button>
                     </Grid>
 
                     <!-- 测试域名选择 -->
                     <Grid Grid.Row="1" Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="2*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
@@ -184,7 +199,17 @@
                             <materialDesign:PackIcon Kind="Refresh" />
                         </Button>
 
-                        <Button Grid.Column="3"
+                        <TextBlock Grid.Column="3" Text="协议:" VerticalAlignment="Center" Margin="16,0,8,0" />
+                        <ComboBox Grid.Column="4"
+                                  ItemsSource="{Binding ProtocolOptions}"
+                                  SelectedValuePath="Value"
+                                  DisplayMemberPath="Key"
+                                  SelectedValue="{Binding SelectedProtocol}"
+                                  Style="{StaticResource MaterialDesignComboBox}"
+                                  Width="160"
+                                  Margin="0,0,16,0" />
+
+                        <Button Grid.Column="6"
                                 Command="{Binding StartTestCommand}"
                                 Style="{StaticResource MaterialDesignRaisedLightButton}"
                                 ToolTip="测试所有 DNS 服务器的延迟">
@@ -232,6 +257,11 @@
                                     <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="150" />
                                     <DataGridTextColumn Header="备用 DNS 地址" Binding="{Binding SecondaryIP}"
                                                         Width="150" />
+                                    <DataGridTextColumn Header="DoH URL" Binding="{Binding DohUrl}" Width="220" />
+                                    <DataGridTextColumn Header="DoT Host" Binding="{Binding DotHost}" Width="160" />
+                                    <DataGridTextColumn Header="DoT Port" Binding="{Binding DotPort}" Width="90" />
+                                    <DataGridTextColumn Header="DoQ Host" Binding="{Binding DoqHost}" Width="160" />
+                                    <DataGridTextColumn Header="DoQ Port" Binding="{Binding DoqPort}" Width="90" />
                                     <DataGridTextColumn Header="延迟 (本机到DNS服务器)"
                                                         Binding="{Binding LatencyDisplay}"
                                                         Width="180"
@@ -321,43 +351,90 @@
                     <!-- 添加自定义 DNS -->
                     <materialDesign:Card Grid.Row="4" Padding="16"
                                          materialDesign:ElevationAssist.Elevation="Dp2">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Vertical">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding NewDnsName, UpdateSourceTrigger=PropertyChanged}"
-                                     materialDesign:HintAssist.Hint="DNS 名称"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Margin="0,0,8,0" />
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding NewDnsName, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="DNS 名称"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="0,0,8,0" />
 
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding NewPrimaryDns, UpdateSourceTrigger=PropertyChanged}"
-                                     materialDesign:HintAssist.Hint="主 DNS 地址"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Margin="8,0,8,0" />
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding NewPrimaryDns, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="主 DNS 地址"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="8,0,8,0" />
 
-                            <TextBox Grid.Column="2"
-                                     Text="{Binding NewSecondaryDns, UpdateSourceTrigger=PropertyChanged}"
-                                     materialDesign:HintAssist.Hint="备用 DNS 地址 (可选)"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Margin="8,0,8,0" />
+                                <TextBox Grid.Column="2"
+                                         Text="{Binding NewSecondaryDns, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="备用 DNS 地址 (可选)"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="8,0,8,0" />
 
-                            <Button Grid.Column="3"
-                                    Command="{Binding AddCustomDnsCommand}"
-                                    Style="{StaticResource MaterialDesignRaisedButton}"
-                                    ToolTip="添加自定义 DNS 服务器"
-                                    Margin="8,0,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="PlusCircleOutline" Margin="0,0,8,0" />
-                                    <TextBlock Text="添加 DNS" />
-                                </StackPanel>
-                            </Button>
-                        </Grid>
+                                <Button Grid.Column="3"
+                                        Command="{Binding AddCustomDnsCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        ToolTip="添加自定义 DNS 服务器"
+                                        Margin="8,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="PlusCircleOutline" Margin="0,0,8,0" />
+                                        <TextBlock Text="添加 DNS" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <!-- 协议端点输入 -->
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding NewDohUrl, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="DoH URL (如: https://example.com/dns-query)"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="0,0,8,0" />
+
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding NewDotHost, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="DoT Host (如: dns.example.com)"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="8,0,8,0" />
+
+                                <TextBox Grid.Column="2"
+                                         Width="90"
+                                         HorizontalAlignment="Left"
+                                         Text="{Binding NewDotPort, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="Port"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="8,0,8,0" />
+
+                                <TextBox Grid.Column="3"
+                                         Text="{Binding NewDoqHost, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="DoQ Host (如: dns.example.com)"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="8,0,8,0" />
+
+                                <TextBox Grid.Column="4"
+                                         Width="90"
+                                         HorizontalAlignment="Left"
+                                         Text="{Binding NewDoqPort, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="Port"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Margin="8,0,0,0" />
+                            </Grid>
+                        </StackPanel>
                     </materialDesign:Card>
                 </Grid>
 

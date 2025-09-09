@@ -14,6 +14,13 @@ public class DnsServerDto
     public string Status { get; set; } = "未测试";
     public string StatusDetail { get; set; } = string.Empty;
 
+    // 新增协议端点
+    public string? DohUrl { get; set; }
+    public string? DotHost { get; set; }
+    public int DotPort { get; set; } = 853;
+    public string? DoqHost { get; set; }
+    public int DoqPort { get; set; } = 853;
+
     // Convert from DnsServer to DTO
     public static DnsServerDto FromDnsServer(DnsServer server)
     {
@@ -25,7 +32,12 @@ public class DnsServerDto
             IsCustom = server.IsCustom,
             Latency = server.Latency,
             Status = server.Status ?? "未测试",
-            StatusDetail = server.StatusDetail ?? string.Empty
+            StatusDetail = server.StatusDetail ?? string.Empty,
+            DohUrl = server.DohUrl,
+            DotHost = server.DotHost,
+            DotPort = server.DotPort,
+            DoqHost = server.DoqHost,
+            DoqPort = server.DoqPort
         };
     }
 
@@ -38,13 +50,20 @@ public class DnsServerDto
             IsCustom = IsCustom,
             Latency = Latency,
             Status = Status ?? "未测试",
-            StatusDetail = StatusDetail ?? string.Empty
+            StatusDetail = StatusDetail ?? string.Empty,
+            DohUrl = DohUrl,
+            DotHost = DotHost,
+            DotPort = DotPort,
+            DoqHost = DoqHost,
+            DoqPort = DoqPort
         };
 
         // Parse IP addresses from their string representations
-        if (!string.IsNullOrEmpty(PrimaryIPString)) server.PrimaryIP = IPAddress.Parse(PrimaryIPString);
+        if (!string.IsNullOrEmpty(PrimaryIPString))
+            server.PrimaryIP = IPAddress.Parse(PrimaryIPString);
 
-        if (!string.IsNullOrEmpty(SecondaryIPString)) server.SecondaryIP = IPAddress.Parse(SecondaryIPString);
+        if (!string.IsNullOrEmpty(SecondaryIPString))
+            server.SecondaryIP = IPAddress.Parse(SecondaryIPString);
 
         return server;
     }

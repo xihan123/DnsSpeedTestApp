@@ -20,6 +20,13 @@ public class MainViewModel : ViewModelBase
     // 新 DNS 条目输入
     private string _newDnsName;
 
+    // 新增：协议端点输入
+    private string _newDohUrl;
+    private string _newDoqHost;
+    private string _newDoqPort = "853";
+    private string _newDotHost;
+    private string _newDotPort = "853";
+
     private string _newPrimaryDns;
 
     private string _newSecondaryDns;
@@ -33,6 +40,8 @@ public class MainViewModel : ViewModelBase
     private DnsServer? _selectedDnsServer;
 
     private NetworkAdapter? _selectedNetworkAdapter;
+
+    private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
 
     private TestDomain? _selectedTestDomain;
 
@@ -51,6 +60,15 @@ public class MainViewModel : ViewModelBase
         NetworkAdapters = new ObservableCollection<NetworkAdapter>();
         TestDomains = new ObservableCollection<TestDomain>();
 
+        // 协议选项（使用 KeyValuePair 便于 WPF 绑定）
+        ProtocolOptions = new ObservableCollection<KeyValuePair<string, DnsProtocol>>
+        {
+            new("UDP/TCP", DnsProtocol.UdpTcp),
+            new("DoH (HTTPS)", DnsProtocol.DoH),
+            new("DoT (TLS 853)", DnsProtocol.DoT),
+            new("DoQ (QUIC 853)", DnsProtocol.DoQ)
+        };
+
         // 初始化命令
         StartTestCommand = new RelayCommand(async obj => await StartDnsTest(), _ => !IsBusy);
         SetDnsCommand = new RelayCommand(async obj => await SetDns(),
@@ -60,6 +78,7 @@ public class MainViewModel : ViewModelBase
         AddCustomDnsCommand = new RelayCommand(obj => AddCustomDns(), _ => !IsBusy && CanAddCustomDns());
         RemoveCustomDnsCommand = new RelayCommand(obj => RemoveCustomDns(obj as DnsServer), _ => true);
         RunNetworkDiagnosticsCommand = new RelayCommand(_ => NetworkDiagnostics.RunDiagnostics(), _ => true);
+        SelfCheckCommand = new RelayCommand(async _ => await RunSelfCheckAsync(), _ => true);
 
         // 测试域名命令
         AddTestDomainCommand = new RelayCommand(obj => AddCustomTestDomain(), _ => !IsBusy && CanAddTestDomain());
@@ -72,11 +91,13 @@ public class MainViewModel : ViewModelBase
 
     // 添加诊断命令
     public ICommand RunNetworkDiagnosticsCommand { get; }
+    public ICommand SelfCheckCommand { get; }
 
     // 集合
     public ObservableCollection<DnsServer> DnsServers { get; }
     public ObservableCollection<NetworkAdapter> NetworkAdapters { get; }
     public ObservableCollection<TestDomain> TestDomains { get; }
+    public ObservableCollection<KeyValuePair<string, DnsProtocol>> ProtocolOptions { get; }
 
     public DnsServer? SelectedDnsServer
     {
@@ -94,6 +115,12 @@ public class MainViewModel : ViewModelBase
     {
         get => _selectedTestDomain;
         set => SetProperty(ref _selectedTestDomain, value);
+    }
+
+    public DnsProtocol SelectedProtocol
+    {
+        get => _selectedProtocol;
+        set => SetProperty(ref _selectedProtocol, value);
     }
 
     public string NewTestDomainName
@@ -146,6 +173,56 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    public string NewDohUrl
+    {
+        get => _newDohUrl;
+        set
+        {
+            SetProperty(ref _newDohUrl, value);
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string NewDotHost
+    {
+        get => _newDotHost;
+        set
+        {
+            SetProperty(ref _newDotHost, value);
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string NewDotPort
+    {
+        get => _newDotPort;
+        set
+        {
+            SetProperty(ref _newDotPort, value);
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string NewDoqHost
+    {
+        get => _newDoqHost;
+        set
+        {
+            SetProperty(ref _newDoqHost, value);
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string NewDoqPort
+    {
+        get => _newDoqPort;
+        set
+        {
+            SetProperty(ref _newDoqPort, value);
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -188,6 +265,20 @@ public class MainViewModel : ViewModelBase
     public ICommand AddTestDomainCommand { get; }
     public ICommand RemoveTestDomainCommand { get; }
     public ICommand RefreshRandomDomainCommand { get; }
+
+    private async Task RunSelfCheckAsync()
+    {
+        try
+        {
+            var domain = SelectedTestDomain?.Domain;
+            var report = await QuicSelfCheck.RunAsync();
+            MessageBox.Show(report, "自检报告", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"自检失败: {ex.Message}", "自检报告", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     // 加载数据
     private void LoadData()
@@ -262,47 +353,37 @@ public class MainViewModel : ViewModelBase
             IsBusy = true;
             TotalCount = DnsServers.Count;
             TestedCount = 0;
-            StatusMessage = $"开始测试 DNS 服务器 (测试域名: {SelectedTestDomain.Domain})...";
+            StatusMessage = $"开始测试 DNS 服务器 (协议: {SelectedProtocol}, 域名: {SelectedTestDomain.Domain})...";
 
-            // 重要：克隆当前的DNS服务器列表，以保留原始顺序和引用
             var dnsServersList = DnsServers.ToList();
 
-            // 为每个DNS服务器准备测试
             foreach (var server in dnsServersList)
             {
                 server.Status = "测试中...";
                 server.Latency = null;
             }
 
-            // 为每个服务器创建测试任务
             var tasks = new Dictionary<DnsServer, Task<DnsServer>>();
             foreach (var server in dnsServersList)
             {
-                // 为每个服务器创建一个独立的测试任务，使用选定的测试域名
-                var task = _dnsTestService.TestDnsServerAsync(server, SelectedTestDomain.Domain);
+                var task = _dnsTestService.TestDnsServerAsync(server, SelectedTestDomain.Domain, SelectedProtocol);
                 tasks.Add(server, task);
             }
 
-            // 等待所有任务完成
             while (tasks.Count > 0)
             {
-                // 等待任何一个任务完成
                 var completedTask = await Task.WhenAny(tasks.Values);
 
-                // 找出完成的任务对应的DNS服务器
                 var serverEntry = tasks.FirstOrDefault(x => x.Value == completedTask);
                 var server = serverEntry.Key;
                 var task = serverEntry.Value;
 
-                // 从待处理任务中删除
                 tasks.Remove(server);
 
                 try
                 {
-                    // 获取测试结果
                     var testedServer = await task;
 
-                    // 手动更新UI集合中的对象属性
                     var serverInCollection = DnsServers.FirstOrDefault(s =>
                         s.Name == testedServer.Name &&
                         s.PrimaryIP.ToString() == testedServer.PrimaryIP.ToString());
@@ -316,7 +397,6 @@ public class MainViewModel : ViewModelBase
                 }
                 catch (Exception ex)
                 {
-                    // 处理单个测试的异常
                     if (server != null)
                     {
                         server.Status = "错误";
@@ -325,27 +405,23 @@ public class MainViewModel : ViewModelBase
                     }
                 }
 
-                // 更新进度
                 TestedCount++;
                 StatusMessage = $"测试进度: {TestedCount}/{TotalCount}";
             }
 
-            // 按延迟排序
             var sortedServers = new List<DnsServer>(
                 DnsServers.OrderBy(s => s.Latency.HasValue ? s.Latency.Value : int.MaxValue)
             );
 
-            // 更新UI列表
             Application.Current.Dispatcher.Invoke(() =>
             {
                 DnsServers.Clear();
                 foreach (var server in sortedServers) DnsServers.Add(server);
 
-                // 选择延迟最低的服务器
                 SelectedDnsServer = DnsServers.FirstOrDefault(s => s.Latency.HasValue);
             });
 
-            StatusMessage = $"DNS 测速完成，测量结果为本机到各 DNS 服务器解析 {SelectedTestDomain.Domain} 的往返延迟";
+            StatusMessage = $"DNS 测速完成（协议: {SelectedProtocol}），结果为本机到各 DNS 服务器解析 {SelectedTestDomain.Domain} 的往返延迟";
         }
         catch (Exception ex)
         {
@@ -422,11 +498,27 @@ public class MainViewModel : ViewModelBase
                 return;
             }
 
+            // 解析端口（可选，失败时采用默认值）
+            var dotPort = 853;
+            if (!string.IsNullOrWhiteSpace(NewDotPort) && int.TryParse(NewDotPort, out var tmpDotPort) &&
+                tmpDotPort > 0 && tmpDotPort <= 65535)
+                dotPort = tmpDotPort;
+
+            var doqPort = 784;
+            if (!string.IsNullOrWhiteSpace(NewDoqPort) && int.TryParse(NewDoqPort, out var tmpDoqPort) &&
+                tmpDoqPort > 0 && tmpDoqPort <= 65535)
+                doqPort = tmpDoqPort;
+
             var newDns = new DnsServer(
                 NewDnsName.Trim(),
                 NewPrimaryDns.Trim(),
                 !string.IsNullOrWhiteSpace(NewSecondaryDns) ? NewSecondaryDns.Trim() : null,
-                true);
+                true,
+                string.IsNullOrWhiteSpace(NewDohUrl) ? null : NewDohUrl.Trim(),
+                string.IsNullOrWhiteSpace(NewDotHost) ? null : NewDotHost.Trim(),
+                dotPort,
+                string.IsNullOrWhiteSpace(NewDoqHost) ? null : NewDoqHost.Trim(),
+                doqPort);
 
             DnsServers.Add(newDns);
 
@@ -434,6 +526,11 @@ public class MainViewModel : ViewModelBase
             NewDnsName = string.Empty;
             NewPrimaryDns = string.Empty;
             NewSecondaryDns = string.Empty;
+            NewDohUrl = string.Empty;
+            NewDotHost = string.Empty;
+            NewDotPort = "853";
+            NewDoqHost = string.Empty;
+            NewDoqPort = "853";
 
             // 保存自定义 DNS 列表
             SaveCustomDnsServers();
