@@ -263,7 +263,7 @@
                                     <DataGridTextColumn Header="DoQ Host" Binding="{Binding DoqHost}" Width="160" />
                                     <DataGridTextColumn Header="DoQ Port" Binding="{Binding DoqPort}" Width="90" />
                                     <DataGridTextColumn Header="延迟 (本机到DNS服务器)"
-                                                        Binding="{Binding LatencyDisplay}"
+                                                        Binding="{Binding Latency, StringFormat={}{0} 毫秒}"
                                                         Width="180"
                                                         SortDirection="Ascending">
                                         <DataGridTextColumn.CellStyle>
