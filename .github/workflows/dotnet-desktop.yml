@@ -21,7 +21,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '9.0.x'
+        dotnet-version: '10.0.x'
 
     - name: Build and publish for win-x64
       run: dotnet publish DNSSpeedTester.csproj -c Release -r win-x64 --output ./publish-x64
