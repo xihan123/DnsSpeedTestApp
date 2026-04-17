@@ -98,6 +98,27 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _newDoqPort = "853";
 
+    // Bootstrap DNS
+    [ObservableProperty]
+    private string _bootstrapDns = string.Empty;
+
+    partial void OnBootstrapDnsChanged(string value)
+    {
+        var trimmed = value?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            _dnsTestService.BootstrapDnsIp = null;
+            _dataPersistenceService.SaveBootstrapDns(null);
+            return;
+        }
+
+        if (IPAddress.TryParse(trimmed, out var ip))
+        {
+            _dnsTestService.BootstrapDnsIp = ip;
+            _dataPersistenceService.SaveBootstrapDns(trimmed);
+        }
+    }
+
     // 新测试域名输入
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
@@ -590,6 +611,10 @@ public partial class MainViewModel : ObservableObject
             if (NetworkAdapters.Count > 0) SelectedNetworkAdapter = NetworkAdapters[0];
 
             LoadTestDomains();
+
+            var savedBootstrap = _dataPersistenceService.LoadBootstrapDns();
+            if (!string.IsNullOrEmpty(savedBootstrap) && IPAddress.TryParse(savedBootstrap, out _))
+                BootstrapDns = savedBootstrap;
 
             StatusMessage = $"已加载 {DnsServers.Count} 个 DNS 服务器和 {NetworkAdapters.Count} 个网络适配器";
         }

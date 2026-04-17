@@ -167,6 +167,8 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Grid.Column="0" Text="测试域名:" VerticalAlignment="Center" Margin="0,0,16,0" />
@@ -209,7 +211,14 @@
                                   Width="160"
                                   Margin="0,0,16,0" />
 
-                        <Button Grid.Column="6"
+                        <TextBlock Grid.Column="6" Text="Bootstrap:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox Grid.Column="7"
+                                 Text="{Binding BootstrapDns, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="IP (如: 8.8.8.8)"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                 Margin="0,0,8,0" />
+
+                        <Button Grid.Column="8"
                                 Command="{Binding StartTestCommand}"
                                 Style="{StaticResource MaterialDesignRaisedLightButton}"
                                 ToolTip="测试所有 DNS 服务器的延迟">

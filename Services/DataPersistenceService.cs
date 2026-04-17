@@ -11,6 +11,7 @@ public class DataPersistenceService
 {
     private readonly string _customDnsFilePath;
     private readonly string _customDomainsFilePath;
+    private readonly string _bootstrapDnsFilePath;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly string _logFilePath;
 
@@ -31,6 +32,7 @@ public class DataPersistenceService
 
         _customDnsFilePath = Path.Combine(appDataPath, "custom_dns.json");
         _customDomainsFilePath = Path.Combine(appDataPath, "custom_domains.json");
+        _bootstrapDnsFilePath = Path.Combine(appDataPath, "bootstrap_dns.json");
         _logFilePath = Path.Combine(appDataPath, "error_logs.txt");
 
         _jsonOptions = new JsonSerializerOptions
@@ -198,6 +200,34 @@ public class DataPersistenceService
             throw;
         }
     }
+
+    public void SaveBootstrapDns(string? bootstrapDns)
+    {
+        try
+        {
+            SaveToFile(_bootstrapDnsFilePath, new { BootstrapDns = bootstrapDns });
+        }
+        catch (Exception ex)
+        {
+            LogError($"Error saving bootstrap DNS: {ex.Message}");
+        }
+    }
+
+    public string? LoadBootstrapDns()
+    {
+        try
+        {
+            var data = LoadFromFile<BootstrapDnsData>(_bootstrapDnsFilePath);
+            return data?.BootstrapDns;
+        }
+        catch (Exception ex)
+        {
+            LogError($"Error loading bootstrap DNS: {ex.Message}");
+            return null;
+        }
+    }
+
+    private record BootstrapDnsData(string? BootstrapDns);
 
     private void LogInfo(string message)
     {
