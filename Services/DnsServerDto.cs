@@ -1,27 +1,22 @@
-﻿using System.Net;
+using System.Net;
 using DNSSpeedTester.Models;
 
 namespace DNSSpeedTester.Services;
 
 public class DnsServerDto
 {
-    // Properties matching your DnsServer class
     public string Name { get; set; } = string.Empty;
     public string PrimaryIPString { get; set; } = string.Empty;
     public string? SecondaryIPString { get; set; }
     public bool IsCustom { get; set; }
-    public int? Latency { get; set; }
-    public string Status { get; set; } = "未测试";
-    public string StatusDetail { get; set; } = string.Empty;
 
-    // 新增协议端点
+    // 协议端点
     public string? DohUrl { get; set; }
     public string? DotHost { get; set; }
     public int DotPort { get; set; } = 853;
     public string? DoqHost { get; set; }
     public int DoqPort { get; set; } = 853;
 
-    // Convert from DnsServer to DTO
     public static DnsServerDto FromDnsServer(DnsServer server)
     {
         return new DnsServerDto
@@ -30,9 +25,6 @@ public class DnsServerDto
             PrimaryIPString = server.PrimaryIP?.ToString() ?? string.Empty,
             SecondaryIPString = server.SecondaryIP?.ToString(),
             IsCustom = server.IsCustom,
-            Latency = server.Latency,
-            Status = server.Status ?? "未测试",
-            StatusDetail = server.StatusDetail ?? string.Empty,
             DohUrl = server.DohUrl,
             DotHost = server.DotHost,
             DotPort = server.DotPort,
@@ -41,16 +33,12 @@ public class DnsServerDto
         };
     }
 
-    // Convert from DTO back to DnsServer
     public DnsServer ToDnsServer()
     {
         var server = new DnsServer
         {
             Name = Name ?? string.Empty,
             IsCustom = IsCustom,
-            Latency = Latency,
-            Status = Status ?? "未测试",
-            StatusDetail = StatusDetail ?? string.Empty,
             DohUrl = DohUrl,
             DotHost = DotHost,
             DotPort = DotPort,
@@ -58,7 +46,6 @@ public class DnsServerDto
             DoqPort = DoqPort
         };
 
-        // Parse IP addresses from their string representations
         if (!string.IsNullOrEmpty(PrimaryIPString))
             server.PrimaryIP = IPAddress.Parse(PrimaryIPString);
 

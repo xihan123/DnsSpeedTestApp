@@ -1,97 +1,19 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Net;
 using System.Windows;
-using System.Windows.Input;
-using DNSSpeedTester.Helpers;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DNSSpeedTester.Models;
 using DNSSpeedTester.Services;
 
 namespace DNSSpeedTester.ViewModels;
 
-public class MainViewModel : ViewModelBase
+public partial class MainViewModel : ObservableObject
 {
     // 服务
     private readonly DataPersistenceService _dataPersistenceService = new();
     private readonly DnsSettingService _dnsSettingService = new();
     private readonly DnsTestService _dnsTestService = new();
-
-    private bool _isBusy;
-
-    // 新 DNS 条目输入
-    private string _newDnsName;
-
-    // 新增：协议端点输入
-    private string _newDohUrl;
-    private string _newDoqHost;
-    private string _newDoqPort = "853";
-    private string _newDotHost;
-    private string _newDotPort = "853";
-
-    private string _newPrimaryDns;
-
-    private string _newSecondaryDns;
-
-    // 新测试域名输入
-    private string _newTestDomainName;
-
-    private string _newTestDomainValue;
-
-    // 选中项
-    private DnsServer? _selectedDnsServer;
-
-    private NetworkAdapter? _selectedNetworkAdapter;
-
-    private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
-
-    private TestDomain? _selectedTestDomain;
-
-    // 状态信息
-    private string _statusMessage;
-
-    // 测试结果
-    private int _testedCount, _totalCount;
-
-
-    // 构造函数
-    public MainViewModel()
-    {
-        // 初始化集合
-        DnsServers = new ObservableCollection<DnsServer>();
-        NetworkAdapters = new ObservableCollection<NetworkAdapter>();
-        TestDomains = new ObservableCollection<TestDomain>();
-
-        // 协议选项（使用 KeyValuePair 便于 WPF 绑定）
-        ProtocolOptions = new ObservableCollection<KeyValuePair<string, DnsProtocol>>
-        {
-            new("UDP/TCP", DnsProtocol.UdpTcp),
-            new("DoH (HTTPS)", DnsProtocol.DoH),
-            new("DoT (TLS 853)", DnsProtocol.DoT),
-            new("DoQ (QUIC 853)", DnsProtocol.DoQ)
-        };
-
-        // 初始化命令
-        StartTestCommand = new RelayCommand(async obj => await StartDnsTest(), _ => !IsBusy);
-        SetDnsCommand = new RelayCommand(async obj => await SetDns(),
-            _ => !IsBusy && SelectedDnsServer != null && SelectedNetworkAdapter != null);
-        ResetToDhcpCommand = new RelayCommand(async obj => await ResetToDhcp(),
-            _ => !IsBusy && SelectedNetworkAdapter != null);
-        AddCustomDnsCommand = new RelayCommand(obj => AddCustomDns(), _ => !IsBusy && CanAddCustomDns());
-        RemoveCustomDnsCommand = new RelayCommand(obj => RemoveCustomDns(obj as DnsServer), _ => true);
-        RunNetworkDiagnosticsCommand = new RelayCommand(_ => NetworkDiagnostics.RunDiagnostics(), _ => true);
-        SelfCheckCommand = new RelayCommand(async _ => await RunSelfCheckAsync(), _ => true);
-
-        // 测试域名命令
-        AddTestDomainCommand = new RelayCommand(obj => AddCustomTestDomain(), _ => !IsBusy && CanAddTestDomain());
-        RemoveTestDomainCommand = new RelayCommand(obj => RemoveTestDomain(obj as TestDomain), _ => true);
-        RefreshRandomDomainCommand = new RelayCommand(obj => RefreshRandomTestDomain(), _ => !IsBusy);
-
-        // 初始化数据
-        LoadData();
-    }
-
-    // 添加诊断命令
-    public ICommand RunNetworkDiagnosticsCommand { get; }
-    public ICommand SelfCheckCommand { get; }
 
     // 集合
     public ObservableCollection<DnsServer> DnsServers { get; }
@@ -99,248 +21,163 @@ public class MainViewModel : ViewModelBase
     public ObservableCollection<TestDomain> TestDomains { get; }
     public ObservableCollection<KeyValuePair<string, DnsProtocol>> ProtocolOptions { get; }
 
-    public DnsServer? SelectedDnsServer
+    // 选中项
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
+    private DnsServer? _selectedDnsServer;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ResetToDhcpCommand))]
+    private NetworkAdapter? _selectedNetworkAdapter;
+
+    [ObservableProperty]
+    private TestDomain? _selectedTestDomain;
+
+    // 编辑状态
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddDnsButtonText))]
+    private bool _isEditingDns;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddTestDomainButtonText))]
+    private bool _isEditingTestDomain;
+
+    public string AddDnsButtonText => IsEditingDns ? "修改" : "添加 DNS";
+    public string AddTestDomainButtonText => IsEditingTestDomain ? "修改" : "添加测试域名";
+
+    [ObservableProperty]
+    private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
+
+    // 状态信息
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
+
+    // 测试结果
+    [ObservableProperty]
+    private int _testedCount;
+
+    [ObservableProperty]
+    private int _totalCount;
+
+    // 忙碌状态
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ResetToDhcpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshRandomDomainCommand))]
+    private bool _isBusy;
+
+    // 新 DNS 条目输入
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    private string _newDnsName = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    private string _newPrimaryDns = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    private string _newSecondaryDns = string.Empty;
+
+    [ObservableProperty]
+    private string _newDohUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _newDotHost = string.Empty;
+
+    [ObservableProperty]
+    private string _newDotPort = "853";
+
+    [ObservableProperty]
+    private string _newDoqHost = string.Empty;
+
+    [ObservableProperty]
+    private string _newDoqPort = "853";
+
+    // 新测试域名输入
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
+    private string _newTestDomainName = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
+    private string _newTestDomainValue = string.Empty;
+
+    // 构造函数
+    public MainViewModel()
     {
-        get => _selectedDnsServer;
-        set => SetProperty(ref _selectedDnsServer, value);
+        DnsServers = [];
+        NetworkAdapters = [];
+        TestDomains = [];
+
+        ProtocolOptions =
+        [
+            new("UDP/TCP", DnsProtocol.UdpTcp),
+            new("DoH (HTTPS)", DnsProtocol.DoH),
+            new("DoT (TLS 853)", DnsProtocol.DoT),
+            new("DoQ (QUIC 853)", DnsProtocol.DoQ)
+        ];
+
+        LoadData();
     }
 
-    public NetworkAdapter? SelectedNetworkAdapter
+    partial void OnSelectedDnsServerChanged(DnsServer? value)
     {
-        get => _selectedNetworkAdapter;
-        set => SetProperty(ref _selectedNetworkAdapter, value);
-    }
-
-    public TestDomain? SelectedTestDomain
-    {
-        get => _selectedTestDomain;
-        set => SetProperty(ref _selectedTestDomain, value);
-    }
-
-    public DnsProtocol SelectedProtocol
-    {
-        get => _selectedProtocol;
-        set => SetProperty(ref _selectedProtocol, value);
-    }
-
-    public string NewTestDomainName
-    {
-        get => _newTestDomainName;
-        set
+        if (value is { IsCustom: true })
         {
-            SetProperty(ref _newTestDomainName, value);
-            CommandManager.InvalidateRequerySuggested();
+            NewDnsName = value.Name;
+            NewPrimaryDns = value.PrimaryIP.ToString();
+            NewSecondaryDns = value.SecondaryIP?.ToString() ?? string.Empty;
+            NewDohUrl = value.DohUrl ?? string.Empty;
+            NewDotHost = value.DotHost ?? string.Empty;
+            NewDotPort = value.DotPort.ToString();
+            NewDoqHost = value.DoqHost ?? string.Empty;
+            NewDoqPort = value.DoqPort.ToString();
+            IsEditingDns = true;
+        }
+        else
+        {
+            ClearDnsInputFields();
+            IsEditingDns = false;
         }
     }
 
-    public string NewTestDomainValue
+    partial void OnSelectedTestDomainChanged(TestDomain? value)
     {
-        get => _newTestDomainValue;
-        set
+        if (value is { IsCustom: true })
         {
-            SetProperty(ref _newTestDomainValue, value);
-            CommandManager.InvalidateRequerySuggested();
+            NewTestDomainName = value.Name;
+            NewTestDomainValue = value.Domain;
+            IsEditingTestDomain = true;
+        }
+        else
+        {
+            NewTestDomainName = string.Empty;
+            NewTestDomainValue = string.Empty;
+            IsEditingTestDomain = false;
         }
     }
 
-    public string NewDnsName
+    private void ClearDnsInputFields()
     {
-        get => _newDnsName;
-        set
-        {
-            SetProperty(ref _newDnsName, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string NewPrimaryDns
-    {
-        get => _newPrimaryDns;
-        set
-        {
-            SetProperty(ref _newPrimaryDns, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string NewSecondaryDns
-    {
-        get => _newSecondaryDns;
-        set
-        {
-            SetProperty(ref _newSecondaryDns, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string NewDohUrl
-    {
-        get => _newDohUrl;
-        set
-        {
-            SetProperty(ref _newDohUrl, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string NewDotHost
-    {
-        get => _newDotHost;
-        set
-        {
-            SetProperty(ref _newDotHost, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string NewDotPort
-    {
-        get => _newDotPort;
-        set
-        {
-            SetProperty(ref _newDotPort, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string NewDoqHost
-    {
-        get => _newDoqHost;
-        set
-        {
-            SetProperty(ref _newDoqHost, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string NewDoqPort
-    {
-        get => _newDoqPort;
-        set
-        {
-            SetProperty(ref _newDoqPort, value);
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public string StatusMessage
-    {
-        get => _statusMessage;
-        set => SetProperty(ref _statusMessage, value);
-    }
-
-    public bool IsBusy
-    {
-        get => _isBusy;
-        set
-        {
-            SetProperty(ref _isBusy, value);
-            ((RelayCommand)StartTestCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)SetDnsCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)ResetToDhcpCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)AddCustomDnsCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)AddTestDomainCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)RefreshRandomDomainCommand).RaiseCanExecuteChanged();
-        }
-    }
-
-    public int TestedCount
-    {
-        get => _testedCount;
-        set => SetProperty(ref _testedCount, value);
-    }
-
-    public int TotalCount
-    {
-        get => _totalCount;
-        set => SetProperty(ref _totalCount, value);
+        NewDnsName = string.Empty;
+        NewPrimaryDns = string.Empty;
+        NewSecondaryDns = string.Empty;
+        NewDohUrl = string.Empty;
+        NewDotHost = string.Empty;
+        NewDotPort = "853";
+        NewDoqHost = string.Empty;
+        NewDoqPort = "853";
     }
 
     // 命令
-    public ICommand StartTestCommand { get; }
-    public ICommand SetDnsCommand { get; }
-    public ICommand ResetToDhcpCommand { get; }
-    public ICommand AddCustomDnsCommand { get; }
-    public ICommand RemoveCustomDnsCommand { get; }
-    public ICommand AddTestDomainCommand { get; }
-    public ICommand RemoveTestDomainCommand { get; }
-    public ICommand RefreshRandomDomainCommand { get; }
 
-    private async Task RunSelfCheckAsync()
-    {
-        try
-        {
-            var domain = SelectedTestDomain?.Domain;
-            var report = await QuicSelfCheck.RunAsync();
-            MessageBox.Show(report, "自检报告", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"自检失败: {ex.Message}", "自检报告", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    // 加载数据
-    private void LoadData()
-    {
-        try
-        {
-            IsBusy = true;
-            StatusMessage = "正在加载数据...";
-
-            // 加载 DNS 服务器
-            DnsServers.Clear();
-            var commonServers = DnsTestService.GetCommonDnsServers();
-            var customServers = _dataPersistenceService.LoadCustomDnsServers();
-
-            foreach (var server in commonServers.Concat(customServers)) DnsServers.Add(server);
-
-            // 加载网络适配器
-            NetworkAdapters.Clear();
-            var adapters = _dnsSettingService.GetNetworkAdapters()
-                .Where(a => a.IsConnected)
-                .ToList();
-
-            foreach (var adapter in adapters) NetworkAdapters.Add(adapter);
-
-            if (NetworkAdapters.Count > 0) SelectedNetworkAdapter = NetworkAdapters[0];
-
-            // 加载测试域名
-            LoadTestDomains();
-
-            StatusMessage = $"已加载 {DnsServers.Count} 个 DNS 服务器和 {NetworkAdapters.Count} 个网络适配器";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"加载数据时出错: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    // 加载测试域名
-    private void LoadTestDomains()
-    {
-        TestDomains.Clear();
-
-        // 加载内置的测试域名
-        var commonDomains = DnsTestService.GetCommonTestDomains();
-
-        // 加载自定义测试域名
-        var customDomains = _dataPersistenceService.LoadCustomTestDomains();
-
-        foreach (var domain in commonDomains.Concat(customDomains)) TestDomains.Add(domain);
-
-        // 默认选中第一个域名
-        if (TestDomains.Count > 0)
-            // 默认选择百度
-            SelectedTestDomain = TestDomains.FirstOrDefault(d => d.Domain == "www.baidu.com") ?? TestDomains[0];
-    }
-
-    // 开始 DNS 测试
-    private async Task StartDnsTest()
+    [RelayCommand(CanExecute = nameof(CanStartTest))]
+    private async Task StartTestAsync()
     {
         if (SelectedTestDomain == null)
         {
@@ -433,7 +270,9 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // 设置 DNS
+    private bool CanStartTest => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanSetDns))]
     private async Task SetDns()
     {
         if (SelectedDnsServer == null || SelectedNetworkAdapter == null)
@@ -460,7 +299,9 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // 恢复为 DHCP
+    private bool CanSetDns => !IsBusy && SelectedDnsServer != null && SelectedNetworkAdapter != null;
+
+    [RelayCommand(CanExecute = nameof(CanResetToDhcp))]
     private async Task ResetToDhcp()
     {
         if (SelectedNetworkAdapter == null)
@@ -487,7 +328,9 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // 添加自定义 DNS
+    private bool CanResetToDhcp => !IsBusy && SelectedNetworkAdapter != null;
+
+    [RelayCommand(CanExecute = nameof(CanAddCustomDns))]
     private void AddCustomDns()
     {
         try
@@ -509,6 +352,26 @@ public class MainViewModel : ViewModelBase
                 tmpDoqPort > 0 && tmpDoqPort <= 65535)
                 doqPort = tmpDoqPort;
 
+            if (IsEditingDns && SelectedDnsServer is { IsCustom: true } server)
+            {
+                server.Name = NewDnsName.Trim();
+                server.PrimaryIP = IPAddress.Parse(NewPrimaryDns.Trim());
+                server.SecondaryIP = !string.IsNullOrWhiteSpace(NewSecondaryDns)
+                    ? IPAddress.Parse(NewSecondaryDns.Trim())
+                    : null;
+                server.DohUrl = string.IsNullOrWhiteSpace(NewDohUrl) ? null : NewDohUrl.Trim();
+                server.DotHost = string.IsNullOrWhiteSpace(NewDotHost) ? null : NewDotHost.Trim();
+                server.DotPort = dotPort;
+                server.DoqHost = string.IsNullOrWhiteSpace(NewDoqHost) ? null : NewDoqHost.Trim();
+                server.DoqPort = doqPort;
+
+                IsEditingDns = false;
+                ClearDnsInputFields();
+                SaveCustomDnsServers();
+                StatusMessage = $"已修改 DNS 服务器: {server.Name}";
+                return;
+            }
+
             var newDns = new DnsServer(
                 NewDnsName.Trim(),
                 NewPrimaryDns.Trim(),
@@ -522,17 +385,7 @@ public class MainViewModel : ViewModelBase
 
             DnsServers.Add(newDns);
 
-            // 清空输入字段
-            NewDnsName = string.Empty;
-            NewPrimaryDns = string.Empty;
-            NewSecondaryDns = string.Empty;
-            NewDohUrl = string.Empty;
-            NewDotHost = string.Empty;
-            NewDotPort = "853";
-            NewDoqHost = string.Empty;
-            NewDoqPort = "853";
-
-            // 保存自定义 DNS 列表
+            ClearDnsInputFields();
             SaveCustomDnsServers();
 
             StatusMessage = $"已添加自定义 DNS 服务器: {newDns.Name}";
@@ -543,141 +396,6 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // 删除自定义 DNS
-    private void RemoveCustomDns(DnsServer server)
-    {
-        if (server == null || !server.IsCustom) return;
-
-        var result = MessageBox.Show(
-            $"确定要删除自定义 DNS 服务器 '{server.Name}' 吗？",
-            "删除确认",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (result == MessageBoxResult.Yes)
-        {
-            DnsServers.Remove(server);
-            SaveCustomDnsServers();
-            StatusMessage = $"已删除自定义 DNS 服务器: {server.Name}";
-        }
-    }
-
-    // 添加自定义测试域名
-    private void AddCustomTestDomain()
-    {
-        try
-        {
-            if (!CanAddTestDomain())
-            {
-                StatusMessage = "请输入有效的域名名称和值";
-                return;
-            }
-
-            var newDomain = new TestDomain(
-                NewTestDomainName.Trim(),
-                NewTestDomainValue.Trim(),
-                "自定义",
-                true);
-
-            TestDomains.Add(newDomain);
-            SelectedTestDomain = newDomain;
-
-            // 清空输入字段
-            NewTestDomainName = string.Empty;
-            NewTestDomainValue = string.Empty;
-
-            // 保存自定义测试域名
-            SaveCustomTestDomains();
-
-            StatusMessage = $"已添加自定义测试域名: {newDomain.Name} [{newDomain.Domain}]";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"添加自定义测试域名时出错: {ex.Message}";
-        }
-    }
-
-    // 删除测试域名
-    private void RemoveTestDomain(TestDomain domain)
-    {
-        if (domain == null || !domain.IsCustom) return;
-
-        var result = MessageBox.Show(
-            $"确定要删除自定义测试域名 '{domain.Name} [{domain.Domain}]' 吗？",
-            "删除确认", MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (result == MessageBoxResult.Yes)
-        {
-            TestDomains.Remove(domain);
-            SaveCustomTestDomains();
-            StatusMessage = $"已删除自定义测试域名: {domain.Name}";
-
-            // 如果删除的是当前选中的域名，则选择默认域名
-            if (SelectedTestDomain == domain)
-                SelectedTestDomain = TestDomains.FirstOrDefault(d => d.Domain == "www.baidu.com") ??
-                                     TestDomains.FirstOrDefault();
-        }
-    }
-
-    // 刷新随机测试域名
-    private void RefreshRandomTestDomain()
-    {
-        try
-        {
-            var randomDomain = TestDomains.FirstOrDefault(d => d.Category == "特殊测试");
-            if (randomDomain != null)
-            {
-                var randomPart = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 8);
-                var newDomainValue = $"{randomPart}.example.com";
-
-                // 更新随机域名
-                var index = TestDomains.IndexOf(randomDomain);
-                TestDomains.Remove(randomDomain);
-
-                var newRandomDomain = new TestDomain("随机域名", newDomainValue, "特殊测试");
-                TestDomains.Insert(index, newRandomDomain);
-
-                if (SelectedTestDomain == randomDomain) SelectedTestDomain = newRandomDomain;
-
-                StatusMessage = $"已刷新随机测试域名: {newDomainValue}";
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"刷新随机域名时出错: {ex.Message}";
-        }
-    }
-
-    // 保存自定义 DNS 列表
-    private void SaveCustomDnsServers()
-    {
-        try
-        {
-            var customServers = DnsServers.Where(s => s.IsCustom).ToList();
-            _dataPersistenceService.SaveCustomDnsServers(customServers);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"保存自定义 DNS 列表时出错: {ex.Message}";
-        }
-    }
-
-    // 保存自定义测试域名
-    private void SaveCustomTestDomains()
-    {
-        try
-        {
-            var customDomains = TestDomains.Where(d => d.IsCustom).ToList();
-            _dataPersistenceService.SaveCustomTestDomains(customDomains);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"保存自定义测试域名列表时出错: {ex.Message}";
-        }
-    }
-
-    // 验证是否可以添加自定义 DNS
     private bool CanAddCustomDns()
     {
         if (string.IsNullOrWhiteSpace(NewDnsName) || string.IsNullOrWhiteSpace(NewPrimaryDns)) return false;
@@ -696,21 +414,231 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // 验证是否可以添加自定义测试域名
+    [RelayCommand]
+    private void RemoveCustomDns(DnsServer server)
+    {
+        if (server == null || !server.IsCustom) return;
+
+        var result = MessageBox.Show(
+            $"确定要删除自定义 DNS 服务器 '{server.Name}' 吗？",
+            "删除确认",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            DnsServers.Remove(server);
+            SaveCustomDnsServers();
+            StatusMessage = $"已删除自定义 DNS 服务器: {server.Name}";
+        }
+    }
+
+    [RelayCommand]
+    private void RunNetworkDiagnostics()
+    {
+        Helpers.NetworkDiagnostics.RunDiagnostics();
+    }
+
+    [RelayCommand]
+    private async Task SelfCheckAsync()
+    {
+        try
+        {
+            var report = await QuicSelfCheck.RunAsync();
+            MessageBox.Show(report, "自检报告", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"自检失败: {ex.Message}", "自检报告", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAddTestDomain))]
+    private void AddTestDomain()
+    {
+        try
+        {
+            if (!CanAddTestDomain())
+            {
+                StatusMessage = "请输入有效的域名名称和值";
+                return;
+            }
+
+            if (IsEditingTestDomain && SelectedTestDomain is { IsCustom: true } domain)
+            {
+                domain.Name = NewTestDomainName.Trim();
+                domain.Domain = NewTestDomainValue.Trim();
+
+                IsEditingTestDomain = false;
+                NewTestDomainName = string.Empty;
+                NewTestDomainValue = string.Empty;
+                SaveCustomTestDomains();
+                StatusMessage = $"已修改测试域名: {domain.Name} [{domain.Domain}]";
+                return;
+            }
+
+            var newDomain = new TestDomain(
+                NewTestDomainName.Trim(),
+                NewTestDomainValue.Trim(),
+                "自定义",
+                true);
+
+            TestDomains.Add(newDomain);
+            SelectedTestDomain = newDomain;
+
+            NewTestDomainName = string.Empty;
+            NewTestDomainValue = string.Empty;
+
+            SaveCustomTestDomains();
+
+            StatusMessage = $"已添加自定义测试域名: {newDomain.Name} [{newDomain.Domain}]";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"添加自定义测试域名时出错: {ex.Message}";
+        }
+    }
+
     private bool CanAddTestDomain()
     {
         if (string.IsNullOrWhiteSpace(NewTestDomainName) || string.IsNullOrWhiteSpace(NewTestDomainValue)) return false;
 
-        // 验证域名格式是否有效
         try
         {
-            // 简单验证，接受任何非空值
             var domain = NewTestDomainValue.Trim();
             return domain.Length > 0 && domain.Contains(".");
         }
         catch
         {
             return false;
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveTestDomain(TestDomain domain)
+    {
+        if (domain == null || !domain.IsCustom) return;
+
+        var result = MessageBox.Show(
+            $"确定要删除自定义测试域名 '{domain.Name} [{domain.Domain}]' 吗？",
+            "删除确认", MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            TestDomains.Remove(domain);
+            SaveCustomTestDomains();
+            StatusMessage = $"已删除自定义测试域名: {domain.Name}";
+
+            if (SelectedTestDomain == domain)
+                SelectedTestDomain = TestDomains.FirstOrDefault(d => d.Domain == "www.baidu.com") ??
+                                     TestDomains.FirstOrDefault();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshRandomDomain))]
+    private void RefreshRandomDomain()
+    {
+        try
+        {
+            var randomDomain = TestDomains.FirstOrDefault(d => d.Category == "特殊测试");
+            if (randomDomain != null)
+            {
+                var randomPart = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 8);
+                var newDomainValue = $"{randomPart}.example.com";
+
+                var index = TestDomains.IndexOf(randomDomain);
+                TestDomains.Remove(randomDomain);
+
+                var newRandomDomain = new TestDomain("随机域名", newDomainValue, "特殊测试");
+                TestDomains.Insert(index, newRandomDomain);
+
+                if (SelectedTestDomain == randomDomain) SelectedTestDomain = newRandomDomain;
+
+                StatusMessage = $"已刷新随机测试域名: {newDomainValue}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"刷新随机域名时出错: {ex.Message}";
+        }
+    }
+
+    private bool CanRefreshRandomDomain => !IsBusy;
+
+    // 加载数据
+    private void LoadData()
+    {
+        try
+        {
+            IsBusy = true;
+            StatusMessage = "正在加载数据...";
+
+            DnsServers.Clear();
+            var commonServers = DnsTestService.GetCommonDnsServers();
+            var customServers = _dataPersistenceService.LoadCustomDnsServers();
+
+            foreach (var server in commonServers.Concat(customServers)) DnsServers.Add(server);
+
+            NetworkAdapters.Clear();
+            var adapters = _dnsSettingService.GetNetworkAdapters()
+                .Where(a => a.IsConnected)
+                .ToList();
+
+            foreach (var adapter in adapters) NetworkAdapters.Add(adapter);
+
+            if (NetworkAdapters.Count > 0) SelectedNetworkAdapter = NetworkAdapters[0];
+
+            LoadTestDomains();
+
+            StatusMessage = $"已加载 {DnsServers.Count} 个 DNS 服务器和 {NetworkAdapters.Count} 个网络适配器";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"加载数据时出错: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void LoadTestDomains()
+    {
+        TestDomains.Clear();
+
+        var commonDomains = DnsTestService.GetCommonTestDomains();
+        var customDomains = _dataPersistenceService.LoadCustomTestDomains();
+
+        foreach (var domain in commonDomains.Concat(customDomains)) TestDomains.Add(domain);
+
+        if (TestDomains.Count > 0)
+            SelectedTestDomain = TestDomains.FirstOrDefault(d => d.Domain == "www.baidu.com") ?? TestDomains[0];
+    }
+
+    private void SaveCustomDnsServers()
+    {
+        try
+        {
+            var customServers = DnsServers.Where(s => s.IsCustom).ToList();
+            _dataPersistenceService.SaveCustomDnsServers(customServers);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"保存自定义 DNS 列表时出错: {ex.Message}";
+        }
+    }
+
+    private void SaveCustomTestDomains()
+    {
+        try
+        {
+            var customDomains = TestDomains.Where(d => d.IsCustom).ToList();
+            _dataPersistenceService.SaveCustomTestDomains(customDomains);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"保存自定义测试域名列表时出错: {ex.Message}";
         }
     }
 }
