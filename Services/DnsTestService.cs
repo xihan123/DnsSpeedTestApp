@@ -16,6 +16,8 @@ namespace DNSSpeedTester.Services;
 
 public class DnsTestService
 {
+    public IPAddress? BootstrapDnsIp { get; set; }
+
     private static readonly HttpClient NoProxyHttpClient = new(new HttpClientHandler
     {
         UseProxy = false
@@ -404,6 +406,96 @@ public class DnsTestService
         }
     }
 
+    private async Task<IPAddress?> ResolveViaBootstrapDnsAsync(string hostname, AddressFamily preferredFamily,
+        CancellationToken ct)
+    {
+        if (BootstrapDnsIp is null) return null;
+
+        try
+        {
+            var qtype = preferredFamily == AddressFamily.InterNetworkV6 ? (ushort)28 : (ushort)1;
+            var query = BuildDnsQuery(hostname, qtype);
+
+            using var udp = new UdpClient();
+            udp.Client.ReceiveTimeout = 3000;
+            udp.Client.SendTimeout = 3000;
+            var remoteEp = new IPEndPoint(BootstrapDnsIp, 53);
+            await udp.SendAsync(query, remoteEp, ct);
+            var result = await udp.ReceiveAsync(ct);
+            var resp = result.Buffer;
+
+            if (resp.Length < 12) return null;
+
+            // 跳过 Header(12) + Question section
+            var offset = 12;
+            // 跳过 QNAME
+            while (offset < resp.Length)
+            {
+                var len = resp[offset++];
+                if (len == 0) break;
+                offset += len;
+            }
+
+            offset += 4; // QTYPE(2) + QCLASS(2)
+
+            // 解析 Answer section
+            var ancount = (resp[6] << 8) | resp[7];
+            for (var i = 0; i < ancount && offset < resp.Length - 10; i++)
+            {
+                // 跳过 NAME（可能是压缩指针 0xC0）
+                if ((resp[offset] & 0xC0) == 0xC0)
+                {
+                    offset += 2;
+                }
+                else
+                {
+                    while (offset < resp.Length)
+                    {
+                        var len = resp[offset++];
+                        if (len == 0) break;
+                        offset += len;
+                    }
+                }
+
+                if (offset + 10 > resp.Length) break;
+
+                var rtype = (resp[offset] << 8) | resp[offset + 1];
+                var rdlength = (resp[offset + 8] << 8) | resp[offset + 9];
+                offset += 10;
+
+                if (rtype == 1 && rdlength == 4 && offset + 4 <= resp.Length) // A record
+                {
+                    return new IPAddress(resp[offset..(offset + 4)]);
+                }
+
+                if (rtype == 28 && rdlength == 16 && offset + 16 <= resp.Length) // AAAA record
+                {
+                    return new IPAddress(resp[offset..(offset + 16)]);
+                }
+
+                offset += rdlength;
+            }
+
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private async Task<IPAddress?> ResolveHostnameAsync(string hostname, AddressFamily preferredFamily,
+        CancellationToken ct)
+    {
+        if (BootstrapDnsIp is not null)
+        {
+            var result = await ResolveViaBootstrapDnsAsync(hostname, preferredFamily, ct);
+            if (result is not null) return result;
+        }
+
+        return await ResolveHostAsync(hostname, preferredFamily, ct);
+    }
+
     private static async Task<TestResult> WithRetryAsync(
         Func<CancellationToken, Task<TestResult>> action, int maxRetries = 1)
     {
@@ -433,6 +525,7 @@ public class DnsTestService
         if (string.IsNullOrWhiteSpace(server.DohUrl))
             return new TestResult(null, "该服务器不支持DoH协议", "NotSupported");
 
+        HttpClient? bootstrapClient = null;
         try
         {
             var dnsQuery = BuildDnsQuery(testDomain, 1);
@@ -442,8 +535,30 @@ public class DnsTestService
             req.Content.Headers.ContentType =
                 new MediaTypeHeaderValue("application/dns-message");
 
+            var httpClient = NoProxyHttpClient;
+            if (BootstrapDnsIp is not null)
+            {
+                var host = new Uri(server.DohUrl).Host;
+                var resolvedIp = await ResolveHostnameAsync(host, AddressFamily.InterNetwork, ct);
+                if (resolvedIp is not null)
+                {
+                    bootstrapClient = new HttpClient(new SocketsHttpHandler
+                    {
+                        UseProxy = false,
+                        ConnectCallback = async (context, token) =>
+                        {
+                            var socket = new Socket(resolvedIp.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                            await socket.ConnectAsync(new IPEndPoint(resolvedIp, context.DnsEndPoint.Port), token);
+                            return new NetworkStream(socket, ownsSocket: true);
+                        }
+                    })
+                    { Timeout = TimeSpan.FromSeconds(8) };
+                    httpClient = bootstrapClient;
+                }
+            }
+
             var sw = Stopwatch.StartNew();
-            using var resp = await NoProxyHttpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
             sw.Stop();
             var handshakeLatency = (int)sw.ElapsedMilliseconds;
 
@@ -469,6 +584,10 @@ public class DnsTestService
         {
             return new TestResult(null, $"HTTP请求失败: {ex.Message}", "Connection");
         }
+        finally
+        {
+            bootstrapClient?.Dispose();
+        }
     }
 
     private async Task<TestResult> MeasureDotLatency(DnsServer server, string testDomain, CancellationToken ct)
@@ -478,7 +597,7 @@ public class DnsTestService
 
         try
         {
-            var targetIp = await ResolveHostAsync(server.DotHost!, server.PrimaryIP.AddressFamily, ct)
+            var targetIp = await ResolveHostnameAsync(server.DotHost!, server.PrimaryIP.AddressFamily, ct)
                            ?? server.PrimaryIP;
 
             using var tcp = new TcpClient();
@@ -543,7 +662,7 @@ public class DnsTestService
             if (outerToken.IsCancellationRequested)
                 return new TestResult(null, "操作已取消", "Timeout");
 
-            var targetIp = await ResolveHostAsync(server.DoqHost!, server.PrimaryIP.AddressFamily, outerToken)
+            var targetIp = await ResolveHostnameAsync(server.DoqHost!, server.PrimaryIP.AddressFamily, outerToken)
                            ?? server.PrimaryIP;
 
             try
