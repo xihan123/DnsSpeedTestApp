@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -16,10 +16,15 @@ namespace DNSSpeedTester.Services;
 
 public class DnsTestService
 {
-    private static readonly HttpClient SharedHttpClient = new()
+    private static readonly HttpClient NoProxyHttpClient = new(new HttpClientHandler
     {
-        Timeout = TimeSpan.FromSeconds(5)
+        UseProxy = false
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(8)
     };
+
+    private sealed record TestResult(int? LatencyMs, string? ErrorMessage, string? ErrorCategory);
 
     // 获取常用测试域名列表 - 保持不变
     public static List<TestDomain> GetCommonTestDomains()
@@ -69,25 +74,51 @@ public class DnsTestService
             serverToTest.Latency = null;
             serverToTest.StatusDetail = string.Empty;
 
-            var finalLatency = protocol switch
-            {
-                DnsProtocol.UdpTcp => await EnhancedDnsSpeedTest(serverToTest.PrimaryIP, testDomain),
-                DnsProtocol.DoH => await MeasureDohLatency(serverToTest, testDomain),
-                DnsProtocol.DoT => await MeasureDotLatency(serverToTest, testDomain),
-                DnsProtocol.DoQ => await MeasureDoqLatency(serverToTest, testDomain),
-                _ => null
-            };
+            TestResult result;
 
-            if (finalLatency.HasValue)
+            switch (protocol)
             {
-                serverToTest.Latency = finalLatency.Value;
+                case DnsProtocol.UdpTcp:
+                {
+                    var latency = await EnhancedDnsSpeedTest(serverToTest.PrimaryIP, testDomain);
+                    result = latency.HasValue
+                        ? new TestResult(latency, null, null)
+                        : new TestResult(null, "DNS查询失败或超时", "Timeout");
+                    break;
+                }
+                case DnsProtocol.DoH:
+                    result = await WithRetryAsync(ct => MeasureDohLatency(serverToTest, testDomain, ct));
+                    break;
+                case DnsProtocol.DoT:
+                    result = await WithRetryAsync(ct => MeasureDotLatency(serverToTest, testDomain, ct));
+                    break;
+                case DnsProtocol.DoQ:
+                    result = await MeasureDoqLatency(serverToTest, testDomain);
+                    break;
+                default:
+                    result = new TestResult(null, "不支持的协议", "Protocol");
+                    break;
+            }
+
+            if (result.LatencyMs.HasValue)
+            {
+                serverToTest.Latency = result.LatencyMs.Value;
                 serverToTest.Status = "成功";
-                serverToTest.StatusDetail = $"DNS响应时间: {finalLatency}ms";
+                serverToTest.StatusDetail = result.ErrorMessage ?? $"DNS响应时间: {result.LatencyMs}ms";
             }
             else
             {
-                serverToTest.Status = "超时";
-                serverToTest.StatusDetail = "DNS查询失败或超时";
+                serverToTest.Status = result.ErrorCategory switch
+                {
+                    "Timeout" => "超时",
+                    "Tls" => "证书错误",
+                    "TlsWarning" => "证书警告",
+                    "Connection" => "连接失败",
+                    "NotSupported" => "不支持",
+                    "Protocol" => "协议错误",
+                    _ => "错误"
+                };
+                serverToTest.StatusDetail = result.ErrorMessage ?? "未知错误";
                 serverToTest.Latency = null;
             }
 
@@ -103,20 +134,20 @@ public class DnsTestService
     }
 
     // 增强版（传统 UDP/TCP）
-    private async Task<int?> EnhancedDnsSpeedTest(IPAddress serverIP, string testDomain)
+    private async Task<int?> EnhancedDnsSpeedTest(IPAddress serverIp, string testDomain)
     {
         var latencies = new List<int>();
 
-        var tcpLatency = await MeasureTcpDnsLatency(serverIP, testDomain);
+        var tcpLatency = await MeasureTcpDnsLatency(serverIp, testDomain);
         if (tcpLatency.HasValue) latencies.Add(tcpLatency.Value);
 
-        var udpLatency = await MeasureUdpDnsLatency(serverIP, testDomain);
+        var udpLatency = await MeasureUdpDnsLatency(serverIp, testDomain);
         if (udpLatency.HasValue) latencies.Add(udpLatency.Value);
 
-        var randomLatency = await MeasureRandomDnsLatency(serverIP);
+        var randomLatency = await MeasureRandomDnsLatency(serverIp);
         if (randomLatency.HasValue) latencies.Add(randomLatency.Value);
 
-        var pingLatency = await MeasurePingLatency(serverIP);
+        var pingLatency = await MeasurePingLatency(serverIp);
         if (pingLatency.HasValue) latencies.Add(pingLatency.Value);
 
         if (latencies.Count == 0) return null;
@@ -128,9 +159,9 @@ public class DnsTestService
         return latencies[latencies.Count / 2];
     }
 
-    private LookupClient CreateTcpClient(IPAddress serverIP)
+    private LookupClient CreateTcpClient(IPAddress serverIp)
     {
-        var options = new LookupClientOptions(new IPEndPoint(serverIP, 53))
+        var options = new LookupClientOptions(new IPEndPoint(serverIp, 53))
         {
             UseCache = false,
             Timeout = TimeSpan.FromSeconds(5),
@@ -141,9 +172,9 @@ public class DnsTestService
         return new LookupClient(options);
     }
 
-    private LookupClient CreateUdpClient(IPAddress serverIP)
+    private LookupClient CreateUdpClient(IPAddress serverIp)
     {
-        var options = new LookupClientOptions(new IPEndPoint(serverIP, 53))
+        var options = new LookupClientOptions(new IPEndPoint(serverIp, 53))
         {
             UseCache = false,
             Timeout = TimeSpan.FromSeconds(5),
@@ -154,19 +185,19 @@ public class DnsTestService
         return new LookupClient(options);
     }
 
-    private async Task<int?> MeasureTcpDnsLatency(IPAddress serverIP, string testDomain)
+    private async Task<int?> MeasureTcpDnsLatency(IPAddress serverIp, string testDomain)
     {
         try
         {
-            var lookupClient = CreateTcpClient(serverIP);
+            var lookupClient = CreateTcpClient(serverIp);
 
             try
             {
                 await lookupClient.QueryAsync("www.example.com", QueryType.A);
             }
-            catch
+            catch (Exception)
             {
-                /* 忽略预热错误 */
+                // 预热错误可以忽略
             }
 
             // 短暂延迟确保预热完成
@@ -181,17 +212,18 @@ public class DnsTestService
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    var result = await lookupClient.QueryAsync(testDomain, QueryType.A);
+                    var queryResult = await lookupClient.QueryAsync(testDomain, QueryType.A);
                     stopwatch.Stop();
 
-                    if (!result.HasError)
+                    if (!queryResult.HasError)
                     {
                         validTests++;
                         totalLatency += (int)stopwatch.ElapsedMilliseconds;
                     }
                 }
-                catch
+                catch (Exception)
                 {
+                    // 单次查询失败可以忽略
                 }
 
                 await Task.Delay(200);
@@ -199,18 +231,19 @@ public class DnsTestService
 
             if (validTests > 0) return totalLatency / validTests;
         }
-        catch
+        catch (Exception)
         {
+            // 整体方法失败
         }
 
         return null;
     }
 
-    private async Task<int?> MeasureUdpDnsLatency(IPAddress serverIP, string testDomain)
+    private async Task<int?> MeasureUdpDnsLatency(IPAddress serverIp, string testDomain)
     {
         try
         {
-            var lookupClient = CreateUdpClient(serverIP);
+            var lookupClient = CreateUdpClient(serverIp);
             var queryTypes = new[] { QueryType.AAAA, QueryType.MX, QueryType.TXT };
 
             var validTests = 0;
@@ -221,14 +254,18 @@ public class DnsTestService
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    var result = await lookupClient.QueryAsync(testDomain, queryType);
+                    var queryResult = await lookupClient.QueryAsync(testDomain, queryType);
                     stopwatch.Stop();
 
-                    validTests++;
-                    totalLatency += (int)stopwatch.ElapsedMilliseconds;
+                    if (!queryResult.HasError)
+                    {
+                        validTests++;
+                        totalLatency += (int)stopwatch.ElapsedMilliseconds;
+                    }
                 }
-                catch
+                catch (Exception)
                 {
+                    // 单次查询失败可以忽略
                 }
 
                 await Task.Delay(100);
@@ -236,18 +273,19 @@ public class DnsTestService
 
             if (validTests > 0) return totalLatency / validTests;
         }
-        catch
+        catch (Exception)
         {
+            // 整体方法失败
         }
 
         return null;
     }
 
-    private async Task<int?> MeasureRandomDnsLatency(IPAddress serverIP)
+    private async Task<int?> MeasureRandomDnsLatency(IPAddress serverIp)
     {
         try
         {
-            var lookupClient = CreateUdpClient(serverIP);
+            var lookupClient = CreateUdpClient(serverIp);
             var validTests = 0;
             var totalLatency = 0;
 
@@ -257,14 +295,18 @@ public class DnsTestService
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    var result = await lookupClient.QueryAsync(randomDomain, QueryType.A);
+                    var queryResult = await lookupClient.QueryAsync(randomDomain, QueryType.A);
                     stopwatch.Stop();
 
-                    validTests++;
-                    totalLatency += (int)stopwatch.ElapsedMilliseconds;
+                    if (!queryResult.HasError)
+                    {
+                        validTests++;
+                        totalLatency += (int)stopwatch.ElapsedMilliseconds;
+                    }
                 }
-                catch
+                catch (Exception)
                 {
+                    // 单次查询失败可以忽略
                 }
 
                 await Task.Delay(100);
@@ -272,14 +314,15 @@ public class DnsTestService
 
             if (validTests > 0) return totalLatency / validTests;
         }
-        catch
+        catch (Exception)
         {
+            // 整体方法失败
         }
 
         return null;
     }
 
-    private async Task<int?> MeasurePingLatency(IPAddress serverIP)
+    private async Task<int?> MeasurePingLatency(IPAddress serverIp)
     {
         try
         {
@@ -290,7 +333,7 @@ public class DnsTestService
             for (var i = 0; i < 4; i++)
                 try
                 {
-                    var reply = await ping.SendPingAsync(serverIP, 3000, new byte[32]);
+                    var reply = await ping.SendPingAsync(serverIp, 3000, new byte[32]);
                     if (reply.Status == IPStatus.Success)
                     {
                         validPings++;
@@ -299,15 +342,17 @@ public class DnsTestService
 
                     await Task.Delay(100);
                 }
-                catch
+                catch (Exception)
                 {
+                    // 单次 ping 失败可以忽略
                 }
 
             if (validPings > 0)
-                return (int)(totalPingLatency / validPings * 1.2);
+                return (int)Math.Round(totalPingLatency * 1.2 / validPings);
         }
-        catch
+        catch (Exception)
         {
+            // 整体方法失败
         }
 
         return null;
@@ -315,14 +360,82 @@ public class DnsTestService
 
     // ========= DoH / DoT / DoQ 实现 =========
 
-    private async Task<int?> MeasureDohLatency(DnsServer server, string testDomain)
+    private static string FormatSocketError(SocketError code) => code switch
     {
-        if (string.IsNullOrWhiteSpace(server.DohUrl)) return null;
+        SocketError.HostNotFound => "域名解析失败",
+        SocketError.HostUnreachable => "主机不可达",
+        SocketError.NetworkUnreachable => "网络不可达",
+        SocketError.ConnectionRefused => "连接被拒绝",
+        SocketError.TimedOut => "连接超时",
+        SocketError.NoData => "域名无对应记录",
+        _ => code.ToString()
+    };
 
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    private static string DiagnoseDnsResponse(byte[] query, byte[]? response)
+    {
+        if (response == null || response.Length < 12) return "响应过短";
+        if (query[0] != response[0] || query[1] != response[1]) return "事务ID不匹配";
+        var flags = IPAddress.NetworkToHostOrder(BitConverter.ToInt16(response, 2));
+        var rcode = flags & 0x0F;
+        return rcode switch
+        {
+            0 => "未知原因",
+            1 => "Format Error",
+            2 => "Server Failure",
+            3 => "域名不存在 (NXDomain)",
+            4 => "未实现 (NotImplemented)",
+            5 => "拒绝查询 (Refused)",
+            _ => $"RCODE={rcode}"
+        };
+    }
+
+    private static async Task<IPAddress?> ResolveHostAsync(string hostname, AddressFamily preferredFamily,
+        CancellationToken ct)
+    {
         try
         {
-            var dnsQuery = BuildDnsQuery(testDomain, 1); // A
+            var addresses = await Dns.GetHostAddressesAsync(hostname, ct);
+            return addresses.FirstOrDefault(ip => ip.AddressFamily == preferredFamily)
+                   ?? addresses.FirstOrDefault();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<TestResult> WithRetryAsync(
+        Func<CancellationToken, Task<TestResult>> action, int maxRetries = 1)
+    {
+        TestResult? lastResult = null;
+        for (var i = 0; i <= maxRetries; i++)
+        {
+            if (i > 0) await Task.Delay(500);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            try
+            {
+                lastResult = await action(cts.Token);
+                if (lastResult.LatencyMs.HasValue) return lastResult;
+                // 不支持的协议不需要重试
+                if (lastResult.ErrorCategory == "NotSupported") return lastResult;
+            }
+            catch (OperationCanceledException)
+            {
+                lastResult = new TestResult(null, $"第{i + 1}次尝试超时", "Timeout");
+            }
+        }
+
+        return lastResult ?? new TestResult(null, "所有重试均失败", "Timeout");
+    }
+
+    private async Task<TestResult> MeasureDohLatency(DnsServer server, string testDomain, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(server.DohUrl))
+            return new TestResult(null, "该服务器不支持DoH协议", "NotSupported");
+
+        try
+        {
+            var dnsQuery = BuildDnsQuery(testDomain, 1);
             using var req = new HttpRequestMessage(HttpMethod.Post, server.DohUrl);
             req.Headers.TryAddWithoutValidation("Accept", "application/dns-message");
             req.Content = new ByteArrayContent(dnsQuery);
@@ -330,112 +443,108 @@ public class DnsTestService
                 new MediaTypeHeaderValue("application/dns-message");
 
             var sw = Stopwatch.StartNew();
-            // SendAsync 会完成 TCP 连接、TLS 握手和发送 HTTP 请求
-            using var resp = await SharedHttpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-            // 在收到响应头的瞬间，握手必然已经完成，此时停止计时
+            using var resp = await NoProxyHttpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
             sw.Stop();
             var handshakeLatency = (int)sw.ElapsedMilliseconds;
 
-            // 继续完成正常的请求流程，以确保测量的有效性
-            var respBytes = await resp.Content.ReadAsByteArrayAsync(cts.Token);
+            var respBytes = await resp.Content.ReadAsByteArrayAsync(ct);
 
-            if (!resp.IsSuccessStatusCode) return null;
+            if (!resp.IsSuccessStatusCode)
+                return new TestResult(null, $"HTTP {(int)resp.StatusCode}", "Connection");
 
-            // 只有当整个 DNS 查询都有效时，才认为这次握手延迟测量是成功的
-            if (IsValidDnsResponse(dnsQuery, respBytes)) return handshakeLatency;
+            if (IsValidDnsResponse(dnsQuery, respBytes))
+                return new TestResult(handshakeLatency, null, null);
 
-            return null;
+            return new TestResult(null, $"DNS响应无效: {DiagnoseDnsResponse(dnsQuery, respBytes)}", "Protocol");
         }
-        catch
+        catch (OperationCanceledException)
         {
-            return null;
+            return new TestResult(null, "连接超时", "Timeout");
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException se)
+        {
+            return new TestResult(null, $"网络连接失败: {FormatSocketError(se.SocketErrorCode)}", "Connection");
+        }
+        catch (HttpRequestException ex)
+        {
+            return new TestResult(null, $"HTTP请求失败: {ex.Message}", "Connection");
         }
     }
 
-    private async Task<int?> MeasureDotLatency(DnsServer server, string testDomain)
+    private async Task<TestResult> MeasureDotLatency(DnsServer server, string testDomain, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(server.DotHost)) return null;
+        if (string.IsNullOrWhiteSpace(server.DotHost))
+            return new TestResult(null, "该服务器不支持DoT协议", "NotSupported");
 
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
         try
         {
+            var targetIp = await ResolveHostAsync(server.DotHost!, server.PrimaryIP.AddressFamily, ct)
+                           ?? server.PrimaryIP;
+
             using var tcp = new TcpClient();
-
             var sw = Stopwatch.StartNew();
-            // 1. TCP 握手
-            await tcp.ConnectAsync(server.PrimaryIP, server.DotPort, cts.Token);
+            await tcp.ConnectAsync(targetIp, server.DotPort, ct);
 
-            using var ssl = new SslStream(tcp.GetStream(), false,
-                null);
+            using var ssl = new SslStream(tcp.GetStream(), false);
             var sslOptions = new SslClientAuthenticationOptions
             {
                 TargetHost = server.DotHost!,
                 EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
             };
-            // 2. TLS 握手
-            await ssl.AuthenticateAsClientAsync(sslOptions, cts.Token);
-            // TLS 握手完成，安全通道已建立，立即停止计时
+            await ssl.AuthenticateAsClientAsync(sslOptions, ct);
             sw.Stop();
             var handshakeLatency = (int)sw.ElapsedMilliseconds;
 
-            // 继续完成正常的请求流程
             var query = BuildDnsQuery(testDomain, 1);
             var framed = AddTcpLengthPrefix(query);
 
-            await ssl.WriteAsync(framed, cts.Token);
-            await ssl.FlushAsync(cts.Token);
+            await ssl.WriteAsync(framed, ct);
+            await ssl.FlushAsync(ct);
 
-            var resp = await ReadTcpPrefixedMessageAsync(ssl, cts.Token);
+            var resp = await ReadTcpPrefixedMessageAsync(ssl, ct);
 
-            // 只有当整个 DNS 查询都有效时，才认为这次握手延迟测量是成功的
-            if (IsValidDnsResponse(query, resp)) return handshakeLatency;
+            if (IsValidDnsResponse(query, resp))
+                return new TestResult(handshakeLatency, null, null);
 
-            return null;
+            return new TestResult(null, $"DNS响应无效: {DiagnoseDnsResponse(query, resp)}", "Protocol");
         }
-        catch
+        catch (OperationCanceledException)
         {
-            return null;
+            return new TestResult(null, "连接超时", "Timeout");
+        }
+        catch (AuthenticationException ex)
+        {
+            return new TestResult(null, $"TLS证书验证失败: {ex.Message}", "Tls");
+        }
+        catch (SocketException ex)
+        {
+            return new TestResult(null, $"TCP连接失败: {FormatSocketError(ex.SocketErrorCode)}", "Connection");
+        }
+        catch (IOException ex)
+        {
+            return new TestResult(null, $"IO错误: {ex.Message}", "Connection");
         }
     }
 
-    /// <summary>
-    ///     测量 DoQ 延迟。该函数现在包含一个诊断模式。
-    /// </summary>
-    /// <param name="server">要测试的 DNS 服务器。</param>
-    /// <param name="testDomain">用于测试的域名。</param>
-    /// <param name="checkOnlyConnection">【诊断模式】如果为 true，则仅测试连接握手，不执行DNS查询，行为与 QuicSelfCheck 完全一致。</param>
-    /// <returns>握手延迟（毫秒），或在失败时返回 null。</returns>
-    private async Task<int?> MeasureDoqLatency(DnsServer server, string testDomain, bool checkOnlyConnection = false)
+    private async Task<TestResult> MeasureDoqLatency(DnsServer server, string testDomain,
+        bool checkOnlyConnection = false)
     {
-        if (!QuicConnection.IsSupported || string.IsNullOrWhiteSpace(server.DoqHost)) return null;
+        if (!QuicConnection.IsSupported)
+            return new TestResult(null, "系统不支持QUIC协议", "NotSupported");
+        if (string.IsNullOrWhiteSpace(server.DoqHost))
+            return new TestResult(null, "该服务器不支持DoQ协议", "NotSupported");
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var outerCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        // 提取 Token 避免在局部函数中捕获 using 变量
+        var outerToken = outerCts.Token;
 
-        async Task<IPAddress?> ResolveDoqIpAddressAsync()
+        async Task<TestResult> AttemptAsync(int port, bool bypassCert = false)
         {
-            try
-            {
-                var addresses = await Dns.GetHostAddressesAsync(server.DoqHost, cts.Token);
-                var targetIp = addresses.FirstOrDefault(ip => ip.AddressFamily == server.PrimaryIP.AddressFamily)
-                               ?? addresses.FirstOrDefault();
+            if (outerToken.IsCancellationRequested)
+                return new TestResult(null, "操作已取消", "Timeout");
 
-                if (targetIp != null) return targetIp;
-            }
-            catch
-            {
-                /* 忽略解析失败 */
-            }
-
-            // 解析失败则回退到 PrimaryIP
-            return server.PrimaryIP;
-        }
-
-        async Task<int?> AttemptAsync(int port)
-        {
-            if (cts.IsCancellationRequested) return null;
-
-            var targetIp = await ResolveDoqIpAddressAsync();
-            if (targetIp == null) return null;
+            var targetIp = await ResolveHostAsync(server.DoqHost!, server.PrimaryIP.AddressFamily, outerToken)
+                           ?? server.PrimaryIP;
 
             try
             {
@@ -445,61 +554,83 @@ public class DnsTestService
                     RemoteEndPoint = endPoint,
                     DefaultCloseErrorCode = 0,
                     DefaultStreamErrorCode = 0,
-                    IdleTimeout = TimeSpan.FromSeconds(10), // 连接空闲超时
+                    IdleTimeout = TimeSpan.FromSeconds(10),
                     ClientAuthenticationOptions = new SslClientAuthenticationOptions
                     {
                         TargetHost = server.DoqHost,
-                        ApplicationProtocols = new List<SslApplicationProtocol> { new("doq") },
-                        RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true
+                        ApplicationProtocols = [new SslApplicationProtocol("doq")],
+                        RemoteCertificateValidationCallback = bypassCert
+                            ? new RemoteCertificateValidationCallback((_, _, _, _) => true)
+                            : null
                     }
                 };
 
                 var sw = Stopwatch.StartNew();
-                using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+                using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(outerToken);
                 connectCts.CancelAfter(TimeSpan.FromSeconds(5));
 
                 await using var conn = await QuicConnection.ConnectAsync(options, connectCts.Token);
                 sw.Stop();
                 var handshakeLatency = (int)sw.ElapsedMilliseconds;
 
-                // --- 诊断模式开关 ---
                 if (checkOnlyConnection)
                 {
                     Debug.WriteLine(
                         $"[DoQ 诊断模式] 连接到 {targetIp}:{port} (Host: {server.DoqHost}) 成功! 耗时: {handshakeLatency} ms");
-                    return handshakeLatency;
+                    return new TestResult(handshakeLatency, null, null);
                 }
-                // --- 诊断模式结束 ---
 
-                // 正常模式：继续完成一次完整的查询
-                await using var stream = await conn.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cts.Token);
+                await using var stream =
+                    await conn.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, outerToken);
                 var query = BuildDnsQuery(testDomain, 1);
                 var framed = AddTcpLengthPrefix(query);
-                await stream.WriteAsync(framed, cts.Token);
+                await stream.WriteAsync(framed, outerToken);
                 stream.CompleteWrites();
 
-                var resp = await ReadTcpPrefixedMessageAsync(stream, cts.Token);
-                if (IsValidDnsResponse(query, resp)) return handshakeLatency;
+                var resp = await ReadTcpPrefixedMessageAsync(stream, outerToken);
+                if (IsValidDnsResponse(query, resp))
+                    return new TestResult(handshakeLatency,
+                        bypassCert ? "证书验证已跳过" : null,
+                        bypassCert ? "TlsWarning" : null);
 
-                Debug.WriteLine($"[DoQ] 连接成功，但DNS响应无效。Host: {server.DoqHost}");
-                return null;
+                return new TestResult(null, $"DNS响应无效: {DiagnoseDnsResponse(query, resp)}", "Protocol");
+            }
+            catch (OperationCanceledException)
+            {
+                return new TestResult(null, $"连接 {targetIp}:{port} 超时", "Timeout");
+            }
+            catch (AuthenticationException ex)
+            {
+                return new TestResult(null, $"TLS失败({targetIp}:{port}): {ex.Message}", "Tls");
             }
             catch (Exception ex)
             {
-                var reason = ex is OperationCanceledException ? "超时" : $"QuicException ({ex.Message})";
-                Debug.WriteLine($"[DoQ] 连接到 {targetIp}:{port} (Host: {server.DoqHost}) 失败. 原因: {reason}");
-                return null;
+                return new TestResult(null, $"QUIC连接失败({targetIp}:{port}): {ex.Message}", "Connection");
             }
         }
 
-        // --- 端口回退逻辑 ---
-        var result = await AttemptAsync(server.DoqPort);
-        if (result.HasValue) return result;
+        // 端口回退：先严格验证证书，TLS 失败则回退到跳过验证
+        int[] ports = server.DoqPort == 853 ? [853, 784] : server.DoqPort == 784 ? [784, 853] : [server.DoqPort];
 
-        if (server.DoqPort == 853) return await AttemptAsync(784);
-        if (server.DoqPort == 784) return await AttemptAsync(853);
+        TestResult? lastError = null;
+        foreach (var port in ports)
+        {
+            if (outerToken.IsCancellationRequested) break;
 
-        return null;
+            var attemptResult = await AttemptAsync(port, bypassCert: false);
+            if (attemptResult.LatencyMs.HasValue) return attemptResult;
+
+            // TLS 证书错误时，用跳过证书验证重试一次
+            if (attemptResult.ErrorCategory == "Tls")
+            {
+                var bypassResult = await AttemptAsync(port, bypassCert: true);
+                if (bypassResult.LatencyMs.HasValue) return bypassResult;
+            }
+
+            lastError = attemptResult;
+        }
+
+        return lastError ?? new TestResult(null, "所有尝试均失败", "Timeout");
     }
 
     /// <summary>
@@ -514,7 +645,7 @@ public class DnsTestService
         using var writer = new BinaryWriter(ms);
 
         // 1. 事务 ID (随机生成)
-        var transactionId = (ushort)new Random().Next(1, 65535);
+        var transactionId = (ushort)Random.Shared.Next(1, 65535);
         writer.Write(IPAddress.HostToNetworkOrder((short)transactionId));
 
         // 2. 标志位 (标准递归查询)
@@ -593,10 +724,10 @@ public class DnsTestService
     /// <param name="query">原始查询报文。</param>
     /// <param name="response">收到的响应报文。</param>
     /// <returns>如果响应有效则为 true，否则为 false。</returns>
-    public static bool IsValidDnsResponse(byte[] query, byte[] response)
+    public static bool IsValidDnsResponse(byte[] query, byte[]? response)
     {
         // 响应至少需要有 12 字节的头部
-        if (response == null || response.Length < 12) return false;
+        if (response is not { Length: >= 12 }) return false;
 
         // 1. 检查事务 ID 是否匹配 (报文的前 2 个字节)
         if (query[0] != response[0] || query[1] != response[1]) return false;
@@ -612,35 +743,67 @@ public class DnsTestService
         return rcode == 0;
     }
 
-    // 获取常见公共DNS服务器列表 - 扩展端点
     public static DnsServer[] GetCommonDnsServers()
     {
-        return new[]
-        {
+        return
+        [
             new DnsServer("Google DNS", "8.8.8.8", "8.8.4.4",
                 dohUrl: "https://dns.google/dns-query",
-                dotHost: "dns.google",
-                doqHost: null),
+                dotHost: "dns.google"),
 
             new DnsServer("Cloudflare DNS", "1.1.1.1", "1.0.0.1",
-                dohUrl: "https://cloudflare-dns.com/dns-query",
-                dotHost: "dns.cloudflare.com",
-                doqHost: null),
+                dohUrl: "https://dns.cloudflare.com/dns-query",
+                dotHost: "one.one.one.one"),
 
             new DnsServer("Quad9", "9.9.9.9", "149.112.112.112",
                 dohUrl: "https://dns.quad9.net/dns-query",
-                dotHost: "dns.quad9.net",
-                doqHost: null),
+                dotHost: "dns.quad9.net"),
 
             new DnsServer("OpenDNS", "208.67.222.222", "208.67.220.220",
                 dohUrl: "https://doh.opendns.com/dns-query",
-                dotHost: "dns.opendns.com",
-                doqHost: null),
+                dotHost: "dns.opendns.com"),
 
             new DnsServer("AdGuard DNS", "94.140.14.14", "94.140.15.15",
-                dohUrl: "https://dns.adguard.com/dns-query",
-                dotHost: "dns.adguard.com",
-                doqHost: "dns.adguard.com"),
+                dohUrl: "https://dns.adguard-dns.com/dns-query",
+                dotHost: "dns.adguard-dns.com",
+                doqHost: "dns.adguard-dns.com"),
+
+            new DnsServer("ControlD", "76.76.2.0", "76.76.10.0",
+                dohUrl: "https://freedns.controld.com/p0",
+                dotHost: "p0.freedns.controld.com"),
+
+            new DnsServer("CleanBrowsing", "185.228.168.168", "185.228.169.168",
+                dohUrl: "https://doh.cleanbrowsing.org/doh/family-filter/",
+                dotHost: "family-filter-dns.cleanbrowsing.org"),
+
+            new DnsServer("Mullvad DNS", "194.242.2.2",
+                dohUrl: "https://dns.mullvad.net/dns-query",
+                dotHost: "dns.mullvad.net"),
+
+            new DnsServer("Surfshark DNS", "194.169.169.169",
+                dohUrl: "https://dns.surfsharkdns.com/dns-query",
+                dotHost: "dns.surfsharkdns.com",
+                doqHost: "dns.surfsharkdns.com"),
+
+            new DnsServer("Verisign DNS", "64.6.64.6", "64.6.65.6"),
+
+            new DnsServer("Hurricane Electric", "74.82.42.42",
+                dohUrl: "https://ordns.he.net/dns-query",
+                dotHost: "ordns.he.net"),
+
+            new DnsServer("DNS.SB", "185.222.222.222", "45.11.45.11",
+                dohUrl: "https://doh.dns.sb/dns-query",
+                dotHost: "dot.sb"),
+
+            new DnsServer("Yandex DNS", "77.88.8.8", "77.88.8.1",
+                dohUrl: "https://common.dot.dns.yandex.net/dns-query",
+                dotHost: "common.dot.dns.yandex.net"),
+
+            new DnsServer("Quad101", "101.101.101.101", "101.102.103.104",
+                dohUrl: "https://dns.twnic.tw/dns-query",
+                dotHost: "101.101.101.101"),
+
+            new DnsServer("Level3 DNS", "4.2.2.1", "4.2.2.2"),
 
             new DnsServer("阿里 DNS", "223.5.5.5", "223.6.6.6",
                 dohUrl: "https://dns.alidns.com/dns-query",
@@ -649,23 +812,23 @@ public class DnsTestService
 
             new DnsServer("DNSPod", "119.29.29.29", "182.254.116.116",
                 dohUrl: "https://doh.pub/dns-query",
-                dotHost: "dot.pub",
-                doqHost: null),
+                dotHost: "dot.pub"),
 
-            new DnsServer("114 DNS", "114.114.114.114", "114.114.115.115",
-                dohUrl: null, dotHost: null, doqHost: null),
+            new DnsServer("114 DNS", "114.114.114.114", "114.114.115.115"),
 
-            new DnsServer("百度 DNS", "180.76.76.76",
-                dohUrl: null, dotHost: null, doqHost: null),
+            new DnsServer("百度 DNS", "180.76.76.76"),
 
             new DnsServer("360 DNS", "101.226.4.6", "218.30.118.6",
-                dohUrl: "https://doh.360.cn/dns-query", dotHost: "doh.360.cn", doqHost: null),
+                dohUrl: "https://doh.360.cn/dns-query",
+                dotHost: "dot.360.cn"),
 
-            new DnsServer("CNNIC SDNS", "1.2.4.8", "210.2.4.8",
-                dohUrl: null, dotHost: null, doqHost: null),
+            new DnsServer("CNNIC SDNS", "1.2.4.8", "210.2.4.8"),
 
-            new DnsServer("火山引擎 DNS", "180.184.1.1", "180.184.2.2",
-                dohUrl: null, dotHost: null, doqHost: null)
-        };
+            new DnsServer("火山引擎 DNS", "180.184.1.1", "180.184.2.2"),
+
+            new DnsServer("OneDNS", "117.50.10.10", "52.80.52.52",
+                dohUrl: "https://doh-pure.onedns.net/dns-query",
+                dotHost: "dot-pure.onedns.net")
+        ];
     }
 }

@@ -270,6 +270,7 @@
                                         <DataGridTextColumn.CellStyle>
                                             <Style TargetType="DataGridCell"
                                                    BasedOn="{StaticResource MaterialDesignDataGridCell}">
+                                                <Setter Property="ToolTip" Value="{Binding StatusDetail}" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Status}" Value="成功">
                                                         <Setter Property="Foreground" Value="Green" />
@@ -287,6 +288,21 @@
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Status}" Value="错误">
                                                         <Setter Property="Foreground" Value="Red" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="连接失败">
+                                                        <Setter Property="Foreground" Value="OrangeRed" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="证书错误">
+                                                        <Setter Property="Foreground" Value="DarkOrange" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="证书警告">
+                                                        <Setter Property="Foreground" Value="DarkOrange" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="不支持">
+                                                        <Setter Property="Foreground" Value="Gray" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="协议错误">
+                                                        <Setter Property="Foreground" Value="OrangeRed" />
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding Status}" Value="未测试">
                                                         <Setter Property="Foreground" Value="Gray" />
