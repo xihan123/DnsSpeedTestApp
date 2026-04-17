@@ -26,7 +26,7 @@ public class DnsSettingService
                     {
                         var deviceId = obj["DeviceID"]?.ToString();
                         var name = obj["NetConnectionID"]?.ToString();
-                        var description = obj["Description"]?.ToString();
+                        var description = obj["Description"]?.ToString() ?? string.Empty;
 
                         // 只有当所有必要数据都存在时才添加适配器
                         if (!string.IsNullOrEmpty(deviceId) && !string.IsNullOrEmpty(name))
@@ -38,7 +38,7 @@ public class DnsSettingService
                                 var status = obj["NetConnectionStatus"];
                                 isConnected = status != null && Convert.ToInt32(status) == 2;
                             }
-                            catch
+                            catch (Exception)
                             {
                                 // 如果无法确定连接状态，则默认为已连接
                                 isConnected = true;
@@ -84,8 +84,9 @@ public class DnsSettingService
                                         {
                                             adapter.DnsServers.Add(IPAddress.Parse(dns));
                                         }
-                                        catch
+                                        catch (FormatException)
                                         {
+                                            // IP 地址格式无效，跳过
                                         }
 
                                 adapters.Add(adapter);
@@ -130,8 +131,9 @@ public class DnsSettingService
                                 {
                                     adapter.DnsServers.Add(IPAddress.Parse(dns));
                                 }
-                                catch
+                                catch (FormatException)
                                 {
+                                    // IP 地址格式无效，跳过
                                 }
                     }
                     catch (Exception ex)
@@ -231,7 +233,7 @@ public class DnsSettingService
                 foreach (ManagementObject obj in searcher.Get())
                 {
                     // 设置 DNS 为自动获取
-                    var outParams = obj.InvokeMethod("SetDNSServerSearchOrder", new object[] { null });
+                    var outParams = obj.InvokeMethod("SetDNSServerSearchOrder", new object?[] { null });
                     var returnValue = (uint)outParams;
 
                     if (returnValue == 0)
@@ -275,5 +277,5 @@ public class DnsSettingService
 public class OperationResult
 {
     public bool Success { get; set; }
-    public string Message { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
