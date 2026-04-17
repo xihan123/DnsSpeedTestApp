@@ -36,3 +36,6 @@ Thumbs.db
 
 # 忽略测试结果文件
 TestResults/
+
+# 忽略Claude Code本地配置
+.claude/

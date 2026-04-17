@@ -254,17 +254,18 @@
                                       materialDesign:DataGridAssist.ColumnHeaderPadding="8">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="DNS 服务器名称" Binding="{Binding Name}" Width="*" />
-                                    <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="150" />
+                                    <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="150" IsReadOnly="True" />
                                     <DataGridTextColumn Header="备用 DNS 地址" Binding="{Binding SecondaryIP}"
-                                                        Width="150" />
+                                                        Width="150" IsReadOnly="True" />
                                     <DataGridTextColumn Header="DoH URL" Binding="{Binding DohUrl}" Width="220" />
                                     <DataGridTextColumn Header="DoT Host" Binding="{Binding DotHost}" Width="160" />
                                     <DataGridTextColumn Header="DoT Port" Binding="{Binding DotPort}" Width="90" />
                                     <DataGridTextColumn Header="DoQ Host" Binding="{Binding DoqHost}" Width="160" />
                                     <DataGridTextColumn Header="DoQ Port" Binding="{Binding DoqPort}" Width="90" />
                                     <DataGridTextColumn Header="延迟 (本机到DNS服务器)"
-                                                        Binding="{Binding Latency, StringFormat={}{0} 毫秒}"
+                                                        Binding="{Binding LatencyDisplay}"
                                                         Width="180"
+                                                        IsReadOnly="True"
                                                         SortDirection="Ascending">
                                         <DataGridTextColumn.CellStyle>
                                             <Style TargetType="DataGridCell"
@@ -338,11 +339,22 @@
                             <Button Grid.Column="2"
                                     Command="{Binding AddTestDomainCommand}"
                                     Style="{StaticResource MaterialDesignRaisedButton}"
-                                    ToolTip="添加自定义测试域名"
+                                    ToolTip="{Binding AddTestDomainButtonText}"
                                     Margin="8,0,0,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="PlusCircleOutline" Margin="0,0,8,0" />
-                                    <TextBlock Text="添加测试域名" />
+                                    <materialDesign:PackIcon Margin="0,0,8,0">
+                                        <materialDesign:PackIcon.Style>
+                                            <Style TargetType="materialDesign:PackIcon">
+                                                <Setter Property="Kind" Value="PlusCircleOutline" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsEditingTestDomain}" Value="True">
+                                                        <Setter Property="Kind" Value="ContentSaveOutline" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </materialDesign:PackIcon.Style>
+                                    </materialDesign:PackIcon>
+                                    <TextBlock Text="{Binding AddTestDomainButtonText}" />
                                 </StackPanel>
                             </Button>
                         </Grid>
@@ -381,11 +393,22 @@
                                 <Button Grid.Column="3"
                                         Command="{Binding AddCustomDnsCommand}"
                                         Style="{StaticResource MaterialDesignRaisedButton}"
-                                        ToolTip="添加自定义 DNS 服务器"
+                                        ToolTip="{Binding AddDnsButtonText}"
                                         Margin="8,0,0,0">
                                     <StackPanel Orientation="Horizontal">
-                                        <materialDesign:PackIcon Kind="PlusCircleOutline" Margin="0,0,8,0" />
-                                        <TextBlock Text="添加 DNS" />
+                                        <materialDesign:PackIcon Margin="0,0,8,0">
+                                            <materialDesign:PackIcon.Style>
+                                                <Style TargetType="materialDesign:PackIcon">
+                                                    <Setter Property="Kind" Value="PlusCircleOutline" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsEditingDns}" Value="True">
+                                                            <Setter Property="Kind" Value="ContentSaveOutline" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </materialDesign:PackIcon.Style>
+                                        </materialDesign:PackIcon>
+                                        <TextBlock Text="{Binding AddDnsButtonText}" />
                                     </StackPanel>
                                 </Button>
                             </Grid>
