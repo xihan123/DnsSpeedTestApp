@@ -728,8 +728,9 @@ public class DnsTestService
             }
         }
 
-        // 端口回退：先严格验证证书，TLS 失败则回退到跳过验证
-        int[] ports = server.DoqPort == 853 ? [853, 784] : server.DoqPort == 784 ? [784, 853] : [server.DoqPort];
+        // 端口回退：仅当配置端口是 DoQ 常见端口之一时，尝试另一个备选端口
+        var altPort = server.DoqPort == 853 ? 784 : server.DoqPort == 784 ? 853 : 0;
+        int[] ports = altPort > 0 ? [server.DoqPort, altPort] : [server.DoqPort];
 
         TestResult? lastError = null;
         foreach (var port in ports)
@@ -885,7 +886,8 @@ public class DnsTestService
             new DnsServer("AdGuard DNS", "94.140.14.14", "94.140.15.15",
                 dohUrl: "https://dns.adguard-dns.com/dns-query",
                 dotHost: "dns.adguard-dns.com",
-                doqHost: "dns.adguard-dns.com"),
+                doqHost: "dns.adguard-dns.com",
+                doqPort: 784),
 
             new DnsServer("ControlD", "76.76.2.0", "76.76.10.0",
                 dohUrl: "https://freedns.controld.com/p0",
@@ -927,7 +929,8 @@ public class DnsTestService
             new DnsServer("阿里 DNS", "223.5.5.5", "223.6.6.6",
                 dohUrl: "https://dns.alidns.com/dns-query",
                 dotHost: "dns.alidns.com",
-                doqHost: "dns.alidns.com"),
+                doqHost: "dns.alidns.com",
+                doqPort: 784),
 
             new DnsServer("DNSPod", "119.29.29.29", "182.254.116.116",
                 dohUrl: "https://doh.pub/dns-query",
