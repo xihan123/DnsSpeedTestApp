@@ -48,6 +48,8 @@ public class DnsServerDto
 
         if (!string.IsNullOrEmpty(PrimaryIPString))
             server.PrimaryIP = IPAddress.Parse(PrimaryIPString);
+        else
+            throw new InvalidOperationException($"自定义 DNS 服务器 '{Name}' 缺少有效的 PrimaryIPString");
 
         if (!string.IsNullOrEmpty(SecondaryIPString))
             server.SecondaryIP = IPAddress.Parse(SecondaryIPString);

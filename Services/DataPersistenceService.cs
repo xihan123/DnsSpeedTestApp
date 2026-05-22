@@ -203,14 +203,7 @@ public class DataPersistenceService
 
     public void SaveBootstrapDns(string? bootstrapDns)
     {
-        try
-        {
-            SaveToFile(_bootstrapDnsFilePath, new { BootstrapDns = bootstrapDns });
-        }
-        catch (Exception ex)
-        {
-            LogError($"Error saving bootstrap DNS: {ex.Message}");
-        }
+        SaveToFile(_bootstrapDnsFilePath, new BootstrapDnsData(bootstrapDns));
     }
 
     public string? LoadBootstrapDns()

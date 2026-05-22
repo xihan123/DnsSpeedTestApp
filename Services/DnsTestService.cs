@@ -105,7 +105,7 @@ public class DnsTestService
             if (result.LatencyMs.HasValue)
             {
                 serverToTest.Latency = result.LatencyMs.Value;
-                serverToTest.Status = "成功";
+                serverToTest.Status = result.ErrorCategory == "TlsWarning" ? "证书警告" : "成功";
                 serverToTest.StatusDetail = result.ErrorMessage ?? $"DNS响应时间: {result.LatencyMs}ms";
             }
             else
@@ -297,14 +297,11 @@ public class DnsTestService
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    var queryResult = await lookupClient.QueryAsync(randomDomain, QueryType.A);
+                    _ = await lookupClient.QueryAsync(randomDomain, QueryType.A);
                     stopwatch.Stop();
 
-                    if (!queryResult.HasError)
-                    {
-                        validTests++;
-                        totalLatency += (int)stopwatch.ElapsedMilliseconds;
-                    }
+                    validTests++;
+                    totalLatency += (int)stopwatch.ElapsedMilliseconds;
                 }
                 catch (Exception)
                 {
@@ -497,13 +494,15 @@ public class DnsTestService
     }
 
     private static async Task<TestResult> WithRetryAsync(
-        Func<CancellationToken, Task<TestResult>> action, int maxRetries = 1)
+        Func<CancellationToken, Task<TestResult>> action, int maxRetries = 1,
+        CancellationToken cancellationToken = default)
     {
         TestResult? lastResult = null;
         for (var i = 0; i <= maxRetries; i++)
         {
-            if (i > 0) await Task.Delay(500);
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            if (i > 0) await Task.Delay(500, cancellationToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(8));
             try
             {
                 lastResult = await action(cts.Token);
@@ -548,8 +547,16 @@ public class DnsTestService
                         ConnectCallback = async (context, token) =>
                         {
                             var socket = new Socket(resolvedIp.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                            await socket.ConnectAsync(new IPEndPoint(resolvedIp, context.DnsEndPoint.Port), token);
-                            return new NetworkStream(socket, ownsSocket: true);
+                            try
+                            {
+                                await socket.ConnectAsync(new IPEndPoint(resolvedIp, context.DnsEndPoint.Port), token);
+                                return new NetworkStream(socket, ownsSocket: true);
+                            }
+                            catch
+                            {
+                                socket.Dispose();
+                                throw;
+                            }
                         }
                     })
                     { Timeout = TimeSpan.FromSeconds(8) };
@@ -745,6 +752,8 @@ public class DnsTestService
             {
                 var bypassResult = await AttemptAsync(port, bypassCert: true);
                 if (bypassResult.LatencyMs.HasValue) return bypassResult;
+                lastError = bypassResult;
+                continue;
             }
 
             lastError = attemptResult;

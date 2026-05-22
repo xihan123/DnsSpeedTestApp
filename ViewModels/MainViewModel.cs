@@ -96,7 +96,7 @@ public partial class MainViewModel : ObservableObject
     private string _newDoqHost = string.Empty;
 
     [ObservableProperty]
-    private string _newDoqPort = "853";
+    private string _newDoqPort = "784";
 
     // Bootstrap DNS
     [ObservableProperty]
@@ -114,8 +114,14 @@ public partial class MainViewModel : ObservableObject
 
         if (IPAddress.TryParse(trimmed, out var ip))
         {
+            if (Equals(_dnsTestService.BootstrapDnsIp, ip)) return;
             _dnsTestService.BootstrapDnsIp = ip;
             _dataPersistenceService.SaveBootstrapDns(trimmed);
+        }
+        else
+        {
+            _dnsTestService.BootstrapDnsIp = null;
+            StatusMessage = $"Bootstrap DNS 地址无效: {trimmed}";
         }
     }
 
@@ -192,7 +198,7 @@ public partial class MainViewModel : ObservableObject
         NewDotHost = string.Empty;
         NewDotPort = "853";
         NewDoqHost = string.Empty;
-        NewDoqPort = "853";
+        NewDoqPort = "784";
     }
 
     // 命令
@@ -385,10 +391,13 @@ public partial class MainViewModel : ObservableObject
                 server.DotPort = dotPort;
                 server.DoqHost = string.IsNullOrWhiteSpace(NewDoqHost) ? null : NewDoqHost.Trim();
                 server.DoqPort = doqPort;
+                server.Status = "未测试";
+                server.Latency = null;
+                server.StatusDetail = string.Empty;
 
+                SaveCustomDnsServers();
                 IsEditingDns = false;
                 ClearDnsInputFields();
-                SaveCustomDnsServers();
                 StatusMessage = $"已修改 DNS 服务器: {server.Name}";
                 return;
             }
@@ -405,6 +414,7 @@ public partial class MainViewModel : ObservableObject
                 doqPort);
 
             DnsServers.Add(newDns);
+            SelectedDnsServer = newDns;
 
             ClearDnsInputFields();
             SaveCustomDnsServers();
@@ -448,8 +458,17 @@ public partial class MainViewModel : ObservableObject
 
         if (result == MessageBoxResult.Yes)
         {
+            var wasSelected = SelectedDnsServer == server;
+
             DnsServers.Remove(server);
             SaveCustomDnsServers();
+
+            if (wasSelected)
+            {
+                IsEditingDns = false;
+                ClearDnsInputFields();
+            }
+
             StatusMessage = $"已删除自定义 DNS 服务器: {server.Name}";
         }
     }
@@ -595,26 +614,50 @@ public partial class MainViewModel : ObservableObject
             IsBusy = true;
             StatusMessage = "正在加载数据...";
 
-            DnsServers.Clear();
+            // 加载 DNS 服务器（内置 + 自定义）
             var commonServers = DnsTestService.GetCommonDnsServers();
             var customServers = _dataPersistenceService.LoadCustomDnsServers();
 
+            DnsServers.Clear();
             foreach (var server in commonServers.Concat(customServers)) DnsServers.Add(server);
 
-            NetworkAdapters.Clear();
-            var adapters = _dnsSettingService.GetNetworkAdapters()
-                .Where(a => a.IsConnected)
-                .ToList();
+            // 加载网络适配器（WMI 可能失败，不影响已加载的服务器）
+            try
+            {
+                NetworkAdapters.Clear();
+                var adapters = _dnsSettingService.GetNetworkAdapters()
+                    .Where(a => a.IsConnected)
+                    .ToList();
 
-            foreach (var adapter in adapters) NetworkAdapters.Add(adapter);
+                foreach (var adapter in adapters) NetworkAdapters.Add(adapter);
+                if (NetworkAdapters.Count > 0) SelectedNetworkAdapter = NetworkAdapters[0];
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"加载网络适配器失败: {ex.Message}";
+            }
 
-            if (NetworkAdapters.Count > 0) SelectedNetworkAdapter = NetworkAdapters[0];
+            // 加载测试域名
+            try
+            {
+                LoadTestDomains();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"加载测试域名失败: {ex.Message}";
+            }
 
-            LoadTestDomains();
-
-            var savedBootstrap = _dataPersistenceService.LoadBootstrapDns();
-            if (!string.IsNullOrEmpty(savedBootstrap) && IPAddress.TryParse(savedBootstrap, out _))
-                BootstrapDns = savedBootstrap;
+            // 加载 Bootstrap DNS
+            try
+            {
+                var savedBootstrap = _dataPersistenceService.LoadBootstrapDns();
+                if (!string.IsNullOrEmpty(savedBootstrap) && IPAddress.TryParse(savedBootstrap, out _))
+                    BootstrapDns = savedBootstrap;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"加载 Bootstrap DNS 失败: {ex.Message}";
+            }
 
             StatusMessage = $"已加载 {DnsServers.Count} 个 DNS 服务器和 {NetworkAdapters.Count} 个网络适配器";
         }
