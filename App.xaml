@@ -7,8 +7,8 @@
 
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- Material Design 主题 -->
-                <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="DeepPurple" SecondaryColor="Lime" />
+                <!-- Material Design 主题（BaseTheme=Inherit：由 ThemeService 在运行时切换浅/深色） -->
+                <materialDesign:BundledTheme BaseTheme="Inherit" PrimaryColor="DeepPurple" SecondaryColor="Lime" />
 
                 <!-- 必要的 Material Design 资源字典 -->
                 <ResourceDictionary

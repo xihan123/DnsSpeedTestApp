@@ -2,7 +2,6 @@
 using System.Management;
 using System.Net;
 using System.Security.Principal;
-using System.Windows;
 using DNSSpeedTester.Models;
 
 namespace DNSSpeedTester.Services;
@@ -12,6 +11,15 @@ public class DnsSettingService
     // 获取网络适配器列表
     public List<NetworkAdapter> GetNetworkAdapters()
     {
+        return GetNetworkAdaptersSafe(out _);
+    }
+
+    /// <summary>
+    ///     获取网络适配器列表，并在失败时通过 <paramref name="errorMessage" /> 返回原因，供上层（ViewModel）呈现。
+    /// </summary>
+    public List<NetworkAdapter> GetNetworkAdaptersSafe(out string? errorMessage)
+    {
+        errorMessage = null;
         var adapters = new List<NetworkAdapter>();
 
         try
@@ -101,8 +109,8 @@ public class DnsSettingService
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"获取网络适配器时出错: {ex.Message}\n\n这可能是由于权限不足或WMI服务问题导致的。\n请确保以管理员身份运行程序。",
-                "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            // 不再在服务层弹出 UI，改为把原因回传给上层呈现（符合 MVVM 分层）
+            errorMessage = $"获取网络适配器时出错: {ex.Message}，可能是权限不足或 WMI 服务问题，请尝试以管理员身份运行。";
 
             Debug.WriteLine($"获取网络适配器时出错: {ex.Message}");
             Debug.WriteLine($"异常堆栈: {ex.StackTrace}");
