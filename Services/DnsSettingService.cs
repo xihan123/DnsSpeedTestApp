@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Management;
 using System.Net;
+using System.Security.Principal;
 using System.Windows;
 using DNSSpeedTester.Models;
 
@@ -160,6 +161,9 @@ public class DnsSettingService
 
     private OperationResult SetDnsServers(NetworkAdapter adapter, DnsServer dnsServer)
     {
+        if (!IsRunningAsAdmin())
+            return new OperationResult { Success = false, Message = "需要管理员权限才能修改系统 DNS，请以管理员身份运行程序。" };
+
         try
         {
             using (var searcher = new ManagementObjectSearcher(
@@ -225,6 +229,9 @@ public class DnsSettingService
 
     private OperationResult ResetToDhcp(NetworkAdapter adapter)
     {
+        if (!IsRunningAsAdmin())
+            return new OperationResult { Success = false, Message = "需要管理员权限才能修改系统 DNS，请以管理员身份运行程序。" };
+
         try
         {
             using (var searcher = new ManagementObjectSearcher(
@@ -271,6 +278,12 @@ public class DnsSettingService
                 Message = $"重置为 DHCP 时出错: {ex.Message}"
             };
         }
+    }
+
+    private static bool IsRunningAsAdmin()
+    {
+        try { return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator); }
+        catch { return false; }
     }
 }
 
