@@ -3,6 +3,7 @@ using System.Net;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DNSSpeedTester.Helpers;
 using DNSSpeedTester.Models;
 using DNSSpeedTester.Services;
 
@@ -15,50 +16,8 @@ public partial class MainViewModel : ObservableObject
     private readonly DnsSettingService _dnsSettingService = new();
     private readonly DnsTestService _dnsTestService = new();
 
-    // 集合
-    public ObservableCollection<DnsServer> DnsServers { get; }
-    public ObservableCollection<NetworkAdapter> NetworkAdapters { get; }
-    public ObservableCollection<TestDomain> TestDomains { get; }
-    public ObservableCollection<KeyValuePair<string, DnsProtocol>> ProtocolOptions { get; }
-
-    // 选中项
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
-    private DnsServer? _selectedDnsServer;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ResetToDhcpCommand))]
-    private NetworkAdapter? _selectedNetworkAdapter;
-
-    [ObservableProperty]
-    private TestDomain? _selectedTestDomain;
-
-    // 编辑状态
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AddDnsButtonText))]
-    private bool _isEditingDns;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AddTestDomainButtonText))]
-    private bool _isEditingTestDomain;
-
-    public string AddDnsButtonText => IsEditingDns ? "修改" : "添加 DNS";
-    public string AddTestDomainButtonText => IsEditingTestDomain ? "修改" : "添加测试域名";
-
-    [ObservableProperty]
-    private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
-
-    // 状态信息
-    [ObservableProperty]
-    private string _statusMessage = string.Empty;
-
-    // 测试结果
-    [ObservableProperty]
-    private int _testedCount;
-
-    [ObservableProperty]
-    private int _totalCount;
+    // Bootstrap DNS
+    [ObservableProperty] private string _bootstrapDns = string.Empty;
 
     // 忙碌状态
     [ObservableProperty]
@@ -70,37 +29,95 @@ public partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(RefreshRandomDomainCommand))]
     private bool _isBusy;
 
+    // 编辑状态
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(AddDnsButtonText))]
+    private bool _isEditingDns;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(AddTestDomainButtonText))]
+    private bool _isEditingTestDomain;
+
     // 新 DNS 条目输入
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
     private string _newDnsName = string.Empty;
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    [ObservableProperty] private string _newDohUrl = string.Empty;
+
+    [ObservableProperty] private string _newDoqHost = string.Empty;
+
+    [ObservableProperty] private string _newDoqPort = "784";
+
+    [ObservableProperty] private string _newDotHost = string.Empty;
+
+    [ObservableProperty] private string _newDotPort = "853";
+
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
     private string _newPrimaryDns = string.Empty;
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
     private string _newSecondaryDns = string.Empty;
 
-    [ObservableProperty]
-    private string _newDohUrl = string.Empty;
+    // 新测试域名输入
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
+    private string _newTestDomainName = string.Empty;
+
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
+    private string _newTestDomainValue = string.Empty;
+
+    // 选中项
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
+    private DnsServer? _selectedDnsServer;
 
     [ObservableProperty]
-    private string _newDotHost = string.Empty;
+    [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ResetToDhcpCommand))]
+    private NetworkAdapter? _selectedNetworkAdapter;
 
-    [ObservableProperty]
-    private string _newDotPort = "853";
+    [ObservableProperty] private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
 
-    [ObservableProperty]
-    private string _newDoqHost = string.Empty;
+    [ObservableProperty] private TestDomain? _selectedTestDomain;
 
-    [ObservableProperty]
-    private string _newDoqPort = "784";
+    // 状态信息
+    [ObservableProperty] private string _statusMessage = string.Empty;
 
-    // Bootstrap DNS
-    [ObservableProperty]
-    private string _bootstrapDns = string.Empty;
+    // 测试结果
+    [ObservableProperty] private int _testedCount;
+
+    [ObservableProperty] private int _totalCount;
+
+    // 构造函数
+    public MainViewModel()
+    {
+        DnsServers = [];
+        NetworkAdapters = [];
+        TestDomains = [];
+
+        ProtocolOptions =
+        [
+            new("UDP/TCP", DnsProtocol.UdpTcp),
+            new("DoH (HTTPS)", DnsProtocol.DoH),
+            new("DoT (TLS 853)", DnsProtocol.DoT),
+            new("DoQ (QUIC 853)", DnsProtocol.DoQ)
+        ];
+
+        LoadData();
+    }
+
+    // 集合
+    public ObservableCollection<DnsServer> DnsServers { get; }
+    public ObservableCollection<NetworkAdapter> NetworkAdapters { get; }
+    public ObservableCollection<TestDomain> TestDomains { get; }
+    public ObservableCollection<KeyValuePair<string, DnsProtocol>> ProtocolOptions { get; }
+
+    public string AddDnsButtonText => IsEditingDns ? "修改" : "添加 DNS";
+    public string AddTestDomainButtonText => IsEditingTestDomain ? "修改" : "添加测试域名";
+
+    private bool CanStartTest => !IsBusy;
+
+    private bool CanSetDns => !IsBusy && SelectedDnsServer != null && SelectedNetworkAdapter != null;
+
+    private bool CanResetToDhcp => !IsBusy && SelectedNetworkAdapter != null;
+
+    private bool CanRefreshRandomDomain => !IsBusy;
 
     partial void OnBootstrapDnsChanged(string value)
     {
@@ -123,33 +140,6 @@ public partial class MainViewModel : ObservableObject
             _dnsTestService.BootstrapDnsIp = null;
             StatusMessage = $"Bootstrap DNS 地址无效: {trimmed}";
         }
-    }
-
-    // 新测试域名输入
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
-    private string _newTestDomainName = string.Empty;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AddTestDomainCommand))]
-    private string _newTestDomainValue = string.Empty;
-
-    // 构造函数
-    public MainViewModel()
-    {
-        DnsServers = [];
-        NetworkAdapters = [];
-        TestDomains = [];
-
-        ProtocolOptions =
-        [
-            new("UDP/TCP", DnsProtocol.UdpTcp),
-            new("DoH (HTTPS)", DnsProtocol.DoH),
-            new("DoT (TLS 853)", DnsProtocol.DoT),
-            new("DoQ (QUIC 853)", DnsProtocol.DoQ)
-        ];
-
-        LoadData();
     }
 
     partial void OnSelectedDnsServerChanged(DnsServer? value)
@@ -297,8 +287,6 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private bool CanStartTest => !IsBusy;
-
     [RelayCommand(CanExecute = nameof(CanSetDns))]
     private async Task SetDns()
     {
@@ -326,8 +314,6 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private bool CanSetDns => !IsBusy && SelectedDnsServer != null && SelectedNetworkAdapter != null;
-
     [RelayCommand(CanExecute = nameof(CanResetToDhcp))]
     private async Task ResetToDhcp()
     {
@@ -354,8 +340,6 @@ public partial class MainViewModel : ObservableObject
             IsBusy = false;
         }
     }
-
-    private bool CanResetToDhcp => !IsBusy && SelectedNetworkAdapter != null;
 
     [RelayCommand(CanExecute = nameof(CanAddCustomDns))]
     private void AddCustomDns()
@@ -476,7 +460,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void RunNetworkDiagnostics()
     {
-        Helpers.NetworkDiagnostics.RunDiagnostics();
+        NetworkDiagnostics.RunDiagnostics();
     }
 
     [RelayCommand]
@@ -604,8 +588,6 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private bool CanRefreshRandomDomain => !IsBusy;
-
     // 加载数据
     private void LoadData()
     {
@@ -626,11 +608,11 @@ public partial class MainViewModel : ObservableObject
             {
                 NetworkAdapters.Clear();
                 var adapters = _dnsSettingService.GetNetworkAdapters()
-                    .Where(a => a.IsConnected)
+                    .OrderByDescending(a => a.IsConnected)
                     .ToList();
 
                 foreach (var adapter in adapters) NetworkAdapters.Add(adapter);
-                if (NetworkAdapters.Count > 0) SelectedNetworkAdapter = NetworkAdapters[0];
+                SelectedNetworkAdapter = NetworkAdapters.FirstOrDefault();
             }
             catch (Exception ex)
             {
