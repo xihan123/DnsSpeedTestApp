@@ -1,0 +1,17 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:conv="clr-namespace:DNSSpeedTester.Converters">
+
+    <!-- 转换器实例 -->
+    <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+    <conv:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibilityConverter" />
+    <conv:StatusToBrushConverter x:Key="StatusToBrushConverter" />
+
+    <!-- 语义状态画刷（中性色调，浅/深色下均可读；主题阶段可进一步细化） -->
+    <SolidColorBrush x:Key="StatusSuccessBrush" Color="#2E9E4F" />
+    <SolidColorBrush x:Key="StatusWarningBrush" Color="#ED6C02" />
+    <SolidColorBrush x:Key="StatusErrorBrush" Color="#D32F2F" />
+    <SolidColorBrush x:Key="StatusInfoBrush" Color="#1E88E5" />
+    <SolidColorBrush x:Key="StatusMutedBrush" Color="#9E9E9E" />
+
+</ResourceDictionary>
