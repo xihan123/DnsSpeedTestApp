@@ -41,6 +41,10 @@ public partial class DnsServer : ObservableObject
     [NotifyPropertyChangedFor(nameof(LatencyDisplay))]
     private string _status = "未测试";
 
+    /// <summary>是否为最近一次测速中最快的服务器（用于结果高亮）。</summary>
+    [ObservableProperty]
+    private bool _isFastest;
+
     [ObservableProperty]
     private string _statusDetail = string.Empty;
 

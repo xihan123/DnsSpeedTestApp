@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using DNSSpeedTester.Services;
 
 namespace DNSSpeedTester;
 
@@ -13,6 +14,15 @@ public partial class App : Application
         // 注册全局未捕获异常处理
         AppDomain.CurrentDomain.UnhandledException += HandleUnhandledException;
         DispatcherUnhandledException += HandleDispatcherException;
+
+        // 订阅系统主题变化（"跟随系统"模式下生效）
+        ThemeService.Initialize();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        ThemeService.Shutdown();
+        base.OnExit(e);
     }
 
     private void HandleUnhandledException(object sender, UnhandledExceptionEventArgs e)

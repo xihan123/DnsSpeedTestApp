@@ -207,7 +207,29 @@
                                           IsReadOnly="True"
                                           materialDesign:DataGridAssist.CellPadding="13 8 8 8"
                                           materialDesign:DataGridAssist.ColumnHeaderPadding="8">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsFastest}" Value="True">
+                                                    <Setter Property="Background" Value="#33FBC02D" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
                                     <DataGrid.Columns>
+                                        <DataGridTemplateColumn Width="36" IsReadOnly="True">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <materialDesign:PackIcon Kind="Star"
+                                                                             Foreground="#FBC02D"
+                                                                             Width="18" Height="18"
+                                                                             HorizontalAlignment="Center"
+                                                                             VerticalAlignment="Center"
+                                                                             ToolTip="本次最快"
+                                                                             Visibility="{Binding IsFastest, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="DNS 服务器名称" Binding="{Binding Name}" Width="*" />
                                         <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="140" />
                                         <DataGridTextColumn Header="备用 DNS 地址" Binding="{Binding SecondaryIP}" Width="140" />
@@ -483,6 +505,29 @@
                                      Text="{Binding BootstrapDns, UpdateSourceTrigger=LostFocus}"
                                      materialDesign:HintAssist.Hint="IP (如: 8.8.8.8)"
                                      Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+
+                            <Separator Margin="0,20" />
+
+                            <TextBlock Text="外观" FontSize="16" FontWeight="SemiBold" />
+                            <TextBlock Text="主题模式（跟随系统时会随 Windows 主题自动切换）"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       TextWrapping="Wrap" Margin="0,4,0,12" />
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="浅色" GroupName="Theme"
+                                             IsChecked="{Binding IsLightTheme, Mode=OneWay}"
+                                             Command="{Binding SetThemeCommand}"
+                                             CommandParameter="Light"
+                                             Margin="0,0,24,0" />
+                                <RadioButton Content="深色" GroupName="Theme"
+                                             IsChecked="{Binding IsDarkTheme, Mode=OneWay}"
+                                             Command="{Binding SetThemeCommand}"
+                                             CommandParameter="Dark"
+                                             Margin="0,0,24,0" />
+                                <RadioButton Content="跟随系统" GroupName="Theme"
+                                             IsChecked="{Binding IsSystemTheme, Mode=OneWay}"
+                                             Command="{Binding SetThemeCommand}"
+                                             CommandParameter="System" />
+                            </StackPanel>
 
                             <Separator Margin="0,20" />
 

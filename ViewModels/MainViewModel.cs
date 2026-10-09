@@ -22,6 +22,17 @@ public partial class MainViewModel : ObservableObject
     // Bootstrap DNS
     [ObservableProperty] private string _bootstrapDns = string.Empty;
 
+    // 主题模式（持久化为字符串："Light" / "Dark" / "System"）
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLightTheme))]
+    [NotifyPropertyChangedFor(nameof(IsDarkTheme))]
+    [NotifyPropertyChangedFor(nameof(IsSystemTheme))]
+    private string _themeMode = nameof(AppThemeMode.System);
+
+    public bool IsLightTheme => ThemeMode == nameof(AppThemeMode.Light);
+    public bool IsDarkTheme => ThemeMode == nameof(AppThemeMode.Dark);
+    public bool IsSystemTheme => ThemeMode == nameof(AppThemeMode.System);
+
     // 忙碌状态
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
@@ -124,6 +135,15 @@ public partial class MainViewModel : ObservableObject
 
     private bool CanRefreshRandomDomain => !IsBusy;
 
+    partial void OnThemeModeChanged(string value)
+    {
+        if (Enum.TryParse<AppThemeMode>(value, out var mode))
+        {
+            ThemeService.Apply(mode);
+            _dataPersistenceService.SaveAppSettings(value);
+        }
+    }
+
     partial void OnBootstrapDnsChanged(string value)
     {
         var trimmed = value?.Trim() ?? string.Empty;
@@ -218,6 +238,9 @@ public partial class MainViewModel : ObservableObject
 
             var dnsServersList = DnsServers.ToList();
 
+            // 每轮刷新随机测试域名，避免命中解析器缓存导致测速失真
+            RefreshRandomDomain();
+
             foreach (var server in dnsServersList)
             {
                 server.Status = "测试中...";
@@ -260,6 +283,10 @@ public partial class MainViewModel : ObservableObject
                 StatusMessage = $"测试进度: {TestedCount}/{TotalCount}";
             }
 
+            // 按延迟排序（快→慢，未测/失败在后），并标记最快项
+            var fastest = DnsServers.Where(s => s.Latency.HasValue).OrderBy(s => s.Latency!.Value).FirstOrDefault();
+            foreach (var s in DnsServers) s.IsFastest = ReferenceEquals(s, fastest);
+
             var sortedServers = new List<DnsServer>(
                 DnsServers.OrderBy(s => s.Latency.HasValue ? s.Latency.Value : int.MaxValue)
             );
@@ -269,7 +296,7 @@ public partial class MainViewModel : ObservableObject
                 DnsServers.Clear();
                 foreach (var server in sortedServers) DnsServers.Add(server);
 
-                SelectedDnsServer = DnsServers.FirstOrDefault(s => s.Latency.HasValue);
+                SelectedDnsServer = fastest ?? DnsServers.FirstOrDefault();
             });
 
             if (_testCts?.IsCancellationRequested == true)
@@ -298,6 +325,13 @@ public partial class MainViewModel : ObservableObject
     }
 
     private bool CanStopTest => IsBusy;
+
+    [RelayCommand]
+    private void SetTheme(string mode)
+    {
+        if (Enum.TryParse<AppThemeMode>(mode, out _))
+            ThemeMode = mode;
+    }
 
     [RelayCommand(CanExecute = nameof(CanSetDns))]
     private async Task SetDns()
@@ -626,12 +660,14 @@ public partial class MainViewModel : ObservableObject
             try
             {
                 NetworkAdapters.Clear();
-                var adapters = _dnsSettingService.GetNetworkAdapters()
+                var adapters = _dnsSettingService.GetNetworkAdaptersSafe(out var adapterError)
                     .OrderByDescending(a => a.IsConnected)
                     .ToList();
 
                 foreach (var adapter in adapters) NetworkAdapters.Add(adapter);
                 SelectedNetworkAdapter = NetworkAdapters.FirstOrDefault();
+
+                if (!string.IsNullOrEmpty(adapterError)) StatusMessage = adapterError;
             }
             catch (Exception ex)
             {
@@ -658,6 +694,18 @@ public partial class MainViewModel : ObservableObject
             catch (Exception ex)
             {
                 StatusMessage = $"加载 Bootstrap DNS 失败: {ex.Message}";
+            }
+
+            // 加载并应用主题（"跟随系统"时 ThemeService 会读取系统设置）
+            try
+            {
+                var savedTheme = _dataPersistenceService.LoadThemeMode();
+                if (Enum.TryParse<AppThemeMode>(savedTheme, out var mode))
+                    ThemeService.Apply(mode);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"加载主题设置失败: {ex.Message}";
             }
 
             StatusMessage = $"已加载 {DnsServers.Count} 个 DNS 服务器和 {NetworkAdapters.Count} 个网络适配器";

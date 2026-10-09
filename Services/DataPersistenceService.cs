@@ -12,6 +12,7 @@ public class DataPersistenceService
     private readonly string _customDnsFilePath;
     private readonly string _customDomainsFilePath;
     private readonly string _bootstrapDnsFilePath;
+    private readonly string _appSettingsFilePath;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly string _logFilePath;
 
@@ -33,6 +34,7 @@ public class DataPersistenceService
         _customDnsFilePath = Path.Combine(appDataPath, "custom_dns.json");
         _customDomainsFilePath = Path.Combine(appDataPath, "custom_domains.json");
         _bootstrapDnsFilePath = Path.Combine(appDataPath, "bootstrap_dns.json");
+        _appSettingsFilePath = Path.Combine(appDataPath, "app_settings.json");
         _logFilePath = Path.Combine(appDataPath, "error_logs.txt");
 
         _jsonOptions = new JsonSerializerOptions
@@ -228,6 +230,28 @@ public class DataPersistenceService
     }
 
     private record BootstrapDnsData(string? BootstrapDns);
+
+    /// <summary>保存应用设置（如主题模式），仅保存主题模式字符串。</summary>
+    public void SaveAppSettings(string themeMode)
+    {
+        SaveToFile(_appSettingsFilePath, new AppSettingsData(themeMode));
+    }
+
+    /// <summary>读取应用设置；文件缺失或损坏时返回 null。</summary>
+    public string? LoadThemeMode()
+    {
+        try
+        {
+            return LoadFromFile<AppSettingsData>(_appSettingsFilePath)?.ThemeMode;
+        }
+        catch (Exception ex)
+        {
+            LogError($"Error loading app settings: {ex.Message}");
+            return null;
+        }
+    }
+
+    private record AppSettingsData(string? ThemeMode);
 
     private void LogInfo(string message)
     {
