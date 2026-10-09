@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="AppBackgroundColor">#F3F5F8</Color>
+    <Color x:Key="AppSurfaceColor">#FFFFFF</Color>
+    <Color x:Key="AppForegroundColor">#1E293B</Color>
+    <Color x:Key="AppMutedColor">#64748B</Color>
+    <Color x:Key="AppBorderColor">#DCE3ED</Color>
+    <Color x:Key="AppHoverColor">#EAF0F7</Color>
+    <Color x:Key="AppSelectionColor">#DBEAFE</Color>
+    <Color x:Key="AppAccentColor">#2563EB</Color>
+    <Color x:Key="AppOnAccentColor">#FFFFFF</Color>
+    <Color x:Key="AppFastestColor">#E8F5EE</Color>
+    <Color x:Key="StatusSuccessColor">#167344</Color>
+    <Color x:Key="StatusWarningColor">#946000</Color>
+    <Color x:Key="StatusErrorColor">#C62828</Color>
+    <Color x:Key="StatusInfoColor">#2563EB</Color>
+    <Color x:Key="StatusMutedColor">#64748B</Color>
+</ResourceDictionary>
