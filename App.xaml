@@ -8,7 +8,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <!-- Material Design 主题（BaseTheme=Inherit：由 ThemeService 在运行时切换浅/深色） -->
-                <materialDesign:BundledTheme BaseTheme="Inherit" PrimaryColor="DeepPurple" SecondaryColor="Lime" />
+                <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="Blue" SecondaryColor="Blue" />
 
                 <!-- 必要的 Material Design 资源字典 -->
                 <ResourceDictionary
@@ -28,6 +28,8 @@
                     Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesignTheme.ProgressBar.xaml" />
                 <ResourceDictionary
                     Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesignTheme.TextBox.xaml" />
+
+                <ResourceDictionary Source="Resources/Themes/Light.xaml" />
 
                 <!-- 应用自有共享资源（转换器、语义状态画刷） -->
                 <ResourceDictionary Source="pack://application:,,,/Resources/SharedResources.xaml" />

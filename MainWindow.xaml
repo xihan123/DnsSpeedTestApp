@@ -7,8 +7,8 @@
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         mc:Ignorable="d"
         Title="DNS 测速与设置工具"
-        Height="750" Width="1040"
-        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        Height="780" Width="1180" MinHeight="640" MinWidth="1100"
+        TextElement.Foreground="{DynamicResource AppForegroundBrush}"
         TextElement.FontWeight="Regular"
         TextElement.FontSize="13"
         TextOptions.TextFormattingMode="Ideal"
@@ -20,7 +20,7 @@
         ResizeMode="CanResizeWithGrip"
         AllowsTransparency="True"
         BorderThickness="0"
-        BorderBrush="{DynamicResource MaterialDesignDivider}">
+        BorderBrush="{DynamicResource AppBorderBrush}">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
@@ -31,8 +31,8 @@
     </Window.DataContext>
 
     <!-- 添加窗口阴影效果 -->
-    <materialDesign:Card Margin="0" Background="{DynamicResource MaterialDesignPaper}"
-                         UniformCornerRadius="8"
+    <materialDesign:Card Margin="0" Background="{DynamicResource AppBackgroundBrush}"
+                         UniformCornerRadius="12"
                          materialDesign:ElevationAssist.Elevation="Dp3">
         <materialDesign:DialogHost Identifier="RootDialog" CloseOnClickAway="True">
             <Grid>
@@ -42,10 +42,12 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- 自定义标题栏 -->
-                <materialDesign:ColorZone Grid.Row="0" Mode="PrimaryMid"
-                                          materialDesign:ElevationAssist.Elevation="Dp2"
-                                          CornerRadius="8,8,0,0">
+                <!-- 自定义标题栏（使用主题感知的背景，浅/深色自动适配） -->
+                <materialDesign:ColorZone Grid.Row="0" Mode="Standard"
+                                          Background="{DynamicResource AppSurfaceBrush}"
+                                          Foreground="{DynamicResource AppForegroundBrush}"
+                                          materialDesign:ElevationAssist.Elevation="Dp0"
+                                          CornerRadius="12,12,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -57,7 +59,8 @@
 
                         <!-- 标题与图标 -->
                         <StackPanel Orientation="Horizontal" Grid.Column="0" Margin="16,10">
-                            <materialDesign:PackIcon Kind="Dns" Height="32" Width="32" VerticalAlignment="Center" />
+                            <materialDesign:PackIcon Kind="Dns" Height="32" Width="32" VerticalAlignment="Center"
+                                                     Foreground="{DynamicResource AppAccentBrush}" />
                             <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" FontSize="20">DNS 测速与设置工具</TextBlock>
                         </StackPanel>
 
@@ -68,18 +71,18 @@
                         <!-- 窗口控制按钮 -->
                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                 Click="MinimizeButton_Click" ToolTip="最小化"
-                                Padding="8" Margin="4" Foreground="AliceBlue">
+                                Padding="8" Margin="4">
                             <materialDesign:PackIcon Kind="WindowMinimize" />
                         </Button>
 
                         <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                 Click="MaximizeRestoreButton_Click" ToolTip="最大化/还原"
-                                Padding="8" Margin="4" Foreground="AliceBlue">
+                                Padding="8" Margin="4">
                             <materialDesign:PackIcon x:Name="MaximizeIcon" Kind="WindowMaximize" />
                         </Button>
 
                         <Button Grid.Column="4" Style="{StaticResource MaterialDesignIconButton}"
-                                Click="CloseButton_Click" ToolTip="关闭" Foreground="#FFFF5252"
+                                Click="CloseButton_Click" ToolTip="关闭" Foreground="{DynamicResource AppMutedBrush}"
                                 Padding="8" Margin="4">
                             <materialDesign:PackIcon Kind="Close" />
                         </Button>
@@ -87,12 +90,12 @@
                 </materialDesign:ColorZone>
 
                 <!-- 主体内容：导航式 TabControl -->
-                <TabControl Grid.Row="1" TabStripPlacement="Left" Margin="8"
+                <TabControl Grid.Row="1" TabStripPlacement="Left" Margin="16"
                             SelectedIndex="0"
                             Background="Transparent" BorderThickness="0">
 
                     <!-- ============ 测速 ============ -->
-                    <TabItem>
+                    <TabItem Style="{StaticResource AppNavigationItem}">
                         <TabItem.Header>
                             <StackPanel Orientation="Horizontal" Margin="4">
                                 <materialDesign:PackIcon Kind="Speedometer" VerticalAlignment="Center" />
@@ -125,7 +128,7 @@
                                           ItemsSource="{Binding TestDomains}"
                                           SelectedItem="{Binding SelectedTestDomain}"
                                           materialDesign:HintAssist.Hint="选择测试域名"
-                                          Style="{StaticResource MaterialDesignComboBox}"
+                                          Style="{StaticResource AppComboBox}"
                                           Margin="0,0,8,0">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
@@ -133,10 +136,10 @@
                                                 <TextBlock Text="{Binding Name}" FontWeight="Bold" />
                                                 <TextBlock Text=" [" />
                                                 <TextBlock Text="{Binding Category}"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}" />
+                                                           Foreground="{DynamicResource AppMutedBrush}" />
                                                 <TextBlock Text="] " />
                                                 <TextBlock Text="{Binding Domain}"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}" />
+                                                           Foreground="{DynamicResource AppMutedBrush}" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
@@ -144,7 +147,7 @@
 
                                 <Button Grid.Column="2"
                                         Command="{Binding RefreshRandomDomainCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Style="{StaticResource AppOutlinedButton}"
                                         ToolTip="刷新随机域名" Margin="0,0,16,0">
                                     <materialDesign:PackIcon Kind="Refresh" />
                                 </Button>
@@ -155,12 +158,12 @@
                                           SelectedValuePath="Value"
                                           DisplayMemberPath="Key"
                                           SelectedValue="{Binding SelectedProtocol}"
-                                          Style="{StaticResource MaterialDesignComboBox}"
+                                          Style="{StaticResource AppComboBox}"
                                           Width="150" Margin="0,0,16,0" />
 
                                 <Button Grid.Column="6"
                                         Command="{Binding StartTestCommand}"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Style="{StaticResource AppRaisedButton}"
                                         ToolTip="测试所有 DNS 服务器的延迟" Margin="0,0,8,0">
                                     <StackPanel Orientation="Horizontal">
                                         <materialDesign:PackIcon Kind="Speedometer" Margin="0,0,8,0" />
@@ -170,7 +173,7 @@
 
                                 <Button Grid.Column="7"
                                         Command="{Binding StopTestCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Style="{StaticResource AppOutlinedButton}"
                                         ToolTip="停止当前测速">
                                     <StackPanel Orientation="Horizontal">
                                         <materialDesign:PackIcon Kind="Stop" Margin="0,0,8,0" />
@@ -181,7 +184,7 @@
 
                             <!-- Bootstrap 指示 + 进度 + 状态 -->
                             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-                                <Border BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="1"
+                                <Border BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
                                         CornerRadius="12" Padding="10,3" Margin="0,0,16,0" VerticalAlignment="Center"
                                         Visibility="{Binding BootstrapDns, Converter={StaticResource NullOrEmptyToVisibilityConverter}}">
                                     <TextBlock Text="{Binding BootstrapDns, StringFormat='Bootstrap: {0}'}"
@@ -197,31 +200,67 @@
                             </StackPanel>
 
                             <!-- DNS 服务器结果表格 -->
-                            <materialDesign:Card Grid.Row="2" Padding="8"
-                                                 materialDesign:ElevationAssist.Elevation="Dp2">
+                            <materialDesign:Card Grid.Row="2" Padding="0"
+                                                 Background="{DynamicResource AppSurfaceBrush}"
+                                                 materialDesign:ElevationAssist.Elevation="Dp0">
                                 <DataGrid ItemsSource="{Binding DnsServers}"
                                           SelectedItem="{Binding SelectedDnsServer}"
+                                          Background="{DynamicResource AppSurfaceBrush}"
+                                          Foreground="{DynamicResource AppForegroundBrush}"
+                                          BorderThickness="0"
+                                          GridLinesVisibility="None"
+                                          HeadersVisibility="Column"
+                                          RowHeight="46" ColumnHeaderHeight="44"
+                                          HorizontalScrollBarVisibility="Auto"
                                           AutoGenerateColumns="False"
                                           CanUserAddRows="False"
                                           CanUserDeleteRows="False"
                                           IsReadOnly="True"
                                           materialDesign:DataGridAssist.CellPadding="13 8 8 8"
                                           materialDesign:DataGridAssist.ColumnHeaderPadding="8">
+                                    <DataGrid.ColumnHeaderStyle>
+                                        <Style TargetType="DataGridColumnHeader"
+                                               BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                                            <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource AppMutedBrush}" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                        </Style>
+                                    </DataGrid.ColumnHeaderStyle>
                                     <DataGrid.RowStyle>
-                                        <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                        <Style TargetType="DataGridRow"
+                                               BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsFastest}" Value="True">
-                                                    <Setter Property="Background" Value="#33FBC02D" />
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource AppFastestBrush}" />
                                                 </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource AppHoverBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource AppSelectionBrush}" />
+                                                </Trigger>
                                             </Style.Triggers>
                                         </Style>
                                     </DataGrid.RowStyle>
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="DataGridCell"
+                                               BasedOn="{StaticResource MaterialDesignDataGridCell}">
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Setter Property="BorderThickness" Value="0" />
+                                            <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+                                        </Style>
+                                    </DataGrid.CellStyle>
                                     <DataGrid.Columns>
                                         <DataGridTemplateColumn Width="36" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <materialDesign:PackIcon Kind="Star"
-                                                                             Foreground="#FBC02D"
+                                                                             Foreground="{DynamicResource StatusSuccessBrush}"
                                                                              Width="18" Height="18"
                                                                              HorizontalAlignment="Center"
                                                                              VerticalAlignment="Center"
@@ -230,22 +269,22 @@
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="DNS 服务器名称" Binding="{Binding Name}" Width="*" />
-                                        <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="140" />
-                                        <DataGridTextColumn Header="备用 DNS 地址" Binding="{Binding SecondaryIP}" Width="140" />
-                                        <DataGridTextColumn Header="DoH URL" Binding="{Binding DohUrl}" Width="210" />
-                                        <DataGridTextColumn Header="DoT Host" Binding="{Binding DotHost}" Width="150" />
-                                        <DataGridTextColumn Header="DoT Port" Binding="{Binding DotPort}" Width="80" />
-                                        <DataGridTextColumn Header="DoQ Host" Binding="{Binding DoqHost}" Width="150" />
-                                        <DataGridTextColumn Header="DoQ Port" Binding="{Binding DoqPort}" Width="80" />
-                                        <DataGridTextColumn Header="延迟 (本机到DNS服务器)"
+                                        <DataGridTextColumn Header="DNS 服务器名称" Binding="{Binding Name}" Width="*"
+                                                            MinWidth="140" />
+                                        <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="130" />
+                                        <DataGridTextColumn Header="备用 DNS 地址" Binding="{Binding SecondaryIP}"
+                                                            Width="130" />
+                                        <DataGridTextColumn Header="支持协议" Width="120"
+                                                            Binding="{Binding Converter={StaticResource CapabilitiesConverter}}" />
+                                        <DataGridTextColumn Header="延迟 (ms)"
                                                             Binding="{Binding LatencyDisplay}"
-                                                            Width="170"
-                                                            SortDirection="Ascending">
+                                                            Width="150">
                                             <DataGridTextColumn.CellStyle>
                                                 <Style TargetType="DataGridCell"
                                                        BasedOn="{StaticResource MaterialDesignDataGridCell}">
                                                     <Setter Property="ToolTip" Value="{Binding StatusDetail}" />
+                                                    <Setter Property="Background" Value="Transparent" />
+                                                    <Setter Property="BorderThickness" Value="0" />
                                                     <Setter Property="Foreground"
                                                             Value="{Binding Status, Converter={StaticResource StatusToBrushConverter}}" />
                                                     <Setter Property="FontWeight" Value="SemiBold" />
@@ -273,7 +312,7 @@
                     </TabItem>
 
                     <!-- ============ 系统 DNS ============ -->
-                    <TabItem>
+                    <TabItem Style="{StaticResource AppNavigationItem}">
                         <TabItem.Header>
                             <StackPanel Orientation="Horizontal" Margin="4">
                                 <materialDesign:PackIcon Kind="Lan" VerticalAlignment="Center" />
@@ -294,29 +333,31 @@
                                           SelectedItem="{Binding SelectedNetworkAdapter}"
                                           DisplayMemberPath="Description"
                                           materialDesign:HintAssist.Hint="选择网络适配器"
-                                          Style="{StaticResource MaterialDesignComboBox}"
+                                          Style="{StaticResource AppComboBox}"
                                           Margin="0,0,16,0" />
                                 <Button Grid.Column="1"
                                         Command="{Binding RunNetworkDiagnosticsCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Style="{StaticResource AppOutlinedButton}"
                                         ToolTip="网络适配器诊断" Margin="0,0,8,0">
                                     <materialDesign:PackIcon Kind="NetworkOutline" />
                                 </Button>
                                 <Button Grid.Column="2"
                                         Command="{Binding SelfCheckCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Style="{StaticResource AppOutlinedButton}"
                                         ToolTip="QUIC/DoQ 自检">
                                     <materialDesign:PackIcon Kind="ShieldCheck" />
                                 </Button>
                             </Grid>
 
-                            <materialDesign:Card Padding="16" Margin="0,0,0,16"
-                                                 materialDesign:ElevationAssist.Elevation="Dp1">
+                            <materialDesign:Card Padding="20" Margin="0,0,0,16"
+                                                 Background="{DynamicResource AppSurfaceBrush}"
+                                                 materialDesign:ElevationAssist.Elevation="Dp0">
                                 <StackPanel>
                                     <TextBlock>
                                         <Run Text="当前获取方式: " />
-                                        <Run Text="{Binding SelectedNetworkAdapter.IsDhcpEnabled, Mode=OneWay}" FontWeight="SemiBold" />
-                                        <Run Text="  (True=自动获取/DHCP)" Foreground="{DynamicResource MaterialDesignBodyLight}" />
+                                        <Run Text="{Binding SelectedNetworkAdapter.IsDhcpEnabled, Mode=OneWay}"
+                                             FontWeight="SemiBold" />
+                                        <Run Text="  (True=自动获取/DHCP)" Foreground="{DynamicResource AppMutedBrush}" />
                                     </TextBlock>
                                     <TextBlock Margin="0,8,0,4" Text="当前适配器 DNS:" />
                                     <ItemsControl ItemsSource="{Binding SelectedNetworkAdapter.DnsServers}">
@@ -328,15 +369,16 @@
                                     </ItemsControl>
                                     <TextBlock Margin="0,8,0,0">
                                         <Run Text="将应用的 DNS 服务器: " />
-                                        <Run Text="{Binding SelectedDnsServer.Name, Mode=OneWay, TargetNullValue=（请在“测速”列表中选择一项）}"
-                                             FontWeight="SemiBold" />
+                                        <Run
+                                            Text="{Binding SelectedDnsServer.Name, Mode=OneWay, TargetNullValue=（请在“测速”列表中选择一项）}"
+                                            FontWeight="SemiBold" />
                                     </TextBlock>
                                 </StackPanel>
                             </materialDesign:Card>
 
                             <StackPanel Orientation="Horizontal">
                                 <Button Command="{Binding SetDnsCommand}"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Style="{StaticResource AppRaisedButton}"
                                         ToolTip="将所选 DNS 服务器设置到所选网卡" Margin="0,0,12,0">
                                     <StackPanel Orientation="Horizontal">
                                         <materialDesign:PackIcon Kind="DnsOutline" Margin="0,0,8,0" />
@@ -344,7 +386,7 @@
                                     </StackPanel>
                                 </Button>
                                 <Button Command="{Binding ResetToDhcpCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Style="{StaticResource AppOutlinedButton}"
                                         ToolTip="恢复为自动获取 DNS (DHCP)">
                                     <StackPanel Orientation="Horizontal">
                                         <materialDesign:PackIcon Kind="Restore" Margin="0,0,8,0" />
@@ -356,7 +398,7 @@
                     </TabItem>
 
                     <!-- ============ 自定义 ============ -->
-                    <TabItem>
+                    <TabItem Style="{StaticResource AppNavigationItem}">
                         <TabItem.Header>
                             <StackPanel Orientation="Horizontal" Margin="4">
                                 <materialDesign:PackIcon Kind="PlaylistEdit" VerticalAlignment="Center" />
@@ -368,7 +410,7 @@
                             <StackPanel Margin="16">
                                 <TextBlock Text="自定义 DNS 服务器" FontSize="16" FontWeight="SemiBold" />
                                 <TextBlock Text="提示：在“测速”列表中选择一个自定义条目即可载入下方表单进行修改；或直接填写新增。"
-                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           Foreground="{DynamicResource AppMutedBrush}"
                                            TextWrapping="Wrap" Margin="0,4,0,12" />
 
                                 <Grid>
@@ -381,18 +423,18 @@
                                     <TextBox Grid.Column="0"
                                              Text="{Binding NewDnsName, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="DNS 名称"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="0,0,8,0" />
                                     <TextBox Grid.Column="1"
                                              Text="{Binding NewPrimaryDns, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="主 DNS 地址"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="8,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="8,0,8,0" />
                                     <TextBox Grid.Column="2"
                                              Text="{Binding NewSecondaryDns, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="备用 DNS 地址 (可选)"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="8,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="8,0,8,0" />
                                     <Button Grid.Column="3"
                                             Command="{Binding AddCustomDnsCommand}"
-                                            Style="{StaticResource MaterialDesignRaisedButton}"
+                                            Style="{StaticResource AppRaisedButton}"
                                             ToolTip="{Binding AddDnsButtonText}" Margin="8,0,0,0">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Margin="0,0,8,0">
@@ -423,30 +465,30 @@
                                     <TextBox Grid.Column="0"
                                              Text="{Binding NewDohUrl, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="DoH URL (如: https://example.com/dns-query)"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="0,0,8,0" />
                                     <TextBox Grid.Column="1"
                                              Text="{Binding NewDotHost, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="DoT Host"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="8,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="8,0,8,0" />
                                     <TextBox Grid.Column="2" Width="80" HorizontalAlignment="Left"
                                              Text="{Binding NewDotPort, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="DoT端口"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="8,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="8,0,8,0" />
                                     <TextBox Grid.Column="3"
                                              Text="{Binding NewDoqHost, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="DoQ Host"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="8,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="8,0,8,0" />
                                     <TextBox Grid.Column="4" Width="80" HorizontalAlignment="Left"
                                              Text="{Binding NewDoqPort, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="DoQ端口"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="8,0,0,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="8,0,0,0" />
                                 </Grid>
 
                                 <Separator Margin="0,20" />
 
                                 <TextBlock Text="自定义测试域名" FontSize="16" FontWeight="SemiBold" />
                                 <TextBlock Text="提示：在“测速”的域名下拉中选择一个自定义域名即可载入下方表单进行修改。"
-                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           Foreground="{DynamicResource AppMutedBrush}"
                                            TextWrapping="Wrap" Margin="0,4,0,12" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -457,14 +499,14 @@
                                     <TextBox Grid.Column="0"
                                              Text="{Binding NewTestDomainName, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="域名名称 (如: 我的网站)"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="0,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="0,0,8,0" />
                                     <TextBox Grid.Column="1"
                                              Text="{Binding NewTestDomainValue, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="域名 (如: www.example.com)"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}" Margin="8,0,8,0" />
+                                             Style="{StaticResource AppTextBox}" Margin="8,0,8,0" />
                                     <Button Grid.Column="2"
                                             Command="{Binding AddTestDomainCommand}"
-                                            Style="{StaticResource MaterialDesignRaisedButton}"
+                                            Style="{StaticResource AppRaisedButton}"
                                             ToolTip="{Binding AddTestDomainButtonText}" Margin="8,0,0,0">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Margin="0,0,8,0">
@@ -472,7 +514,8 @@
                                                     <Style TargetType="materialDesign:PackIcon">
                                                         <Setter Property="Kind" Value="PlusCircleOutline" />
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsEditingTestDomain}" Value="True">
+                                                            <DataTrigger Binding="{Binding IsEditingTestDomain}"
+                                                                         Value="True">
                                                                 <Setter Property="Kind" Value="ContentSaveOutline" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -488,7 +531,7 @@
                     </TabItem>
 
                     <!-- ============ 高级 ============ -->
-                    <TabItem>
+                    <TabItem Style="{StaticResource AppNavigationItem}">
                         <TabItem.Header>
                             <StackPanel Orientation="Horizontal" Margin="4">
                                 <materialDesign:PackIcon Kind="Tune" VerticalAlignment="Center" />
@@ -499,18 +542,18 @@
                         <StackPanel Margin="16">
                             <TextBlock Text="Bootstrap DNS" FontSize="16" FontWeight="SemiBold" />
                             <TextBlock Text="用于解析加密 DNS (DoH/DoT/DoQ) 上游域名的 UDP DNS 服务器；留空则使用系统 DNS。"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       Foreground="{DynamicResource AppMutedBrush}"
                                        TextWrapping="Wrap" Margin="0,4,0,12" />
                             <TextBox Width="280" HorizontalAlignment="Left"
                                      Text="{Binding BootstrapDns, UpdateSourceTrigger=LostFocus}"
                                      materialDesign:HintAssist.Hint="IP (如: 8.8.8.8)"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+                                     Style="{StaticResource AppTextBox}" />
 
                             <Separator Margin="0,20" />
 
                             <TextBlock Text="外观" FontSize="16" FontWeight="SemiBold" />
                             <TextBlock Text="主题模式（跟随系统时会随 Windows 主题自动切换）"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       Foreground="{DynamicResource AppMutedBrush}"
                                        TextWrapping="Wrap" Margin="0,4,0,12" />
                             <StackPanel Orientation="Horizontal">
                                 <RadioButton Content="浅色" GroupName="Theme"
@@ -534,15 +577,17 @@
                             <TextBlock Text="关于" FontSize="16" FontWeight="SemiBold" />
                             <TextBlock Text="DNS 测速与设置工具" Margin="0,8,0,0" />
                             <TextBlock Text="支持 UDP/TCP、DoH、DoT、DoQ 四种协议测速，并可一键设置系统 DNS。"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       Foreground="{DynamicResource AppMutedBrush}"
                                        TextWrapping="Wrap" Margin="0,4,0,0" />
                         </StackPanel>
                     </TabItem>
                 </TabControl>
 
-                <!-- 状态栏 -->
-                <materialDesign:ColorZone Grid.Row="2" Mode="PrimaryLight" Padding="8"
-                                          CornerRadius="0,0,8,8">
+                <!-- 状态栏（主题感知背景） -->
+                <materialDesign:ColorZone Grid.Row="2" Mode="Standard" Padding="8"
+                                          Background="{DynamicResource AppSurfaceBrush}"
+                                          Foreground="{DynamicResource AppForegroundBrush}"
+                                          CornerRadius="0,0,12,12">
                     <DockPanel>
                         <ProgressBar DockPanel.Dock="Right"
                                      IsIndeterminate="True"

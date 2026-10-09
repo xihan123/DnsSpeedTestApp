@@ -1,17 +1,90 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:conv="clr-namespace:DNSSpeedTester.Converters">
+                    xmlns:conv="clr-namespace:DNSSpeedTester.Converters"
+                    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
 
     <!-- 转换器实例 -->
     <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />
     <conv:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibilityConverter" />
     <conv:StatusToBrushConverter x:Key="StatusToBrushConverter" />
+    <conv:CapabilitiesConverter x:Key="CapabilitiesConverter" />
 
-    <!-- 语义状态画刷（中性色调，浅/深色下均可读；主题阶段可进一步细化） -->
-    <SolidColorBrush x:Key="StatusSuccessBrush" Color="#2E9E4F" />
-    <SolidColorBrush x:Key="StatusWarningBrush" Color="#ED6C02" />
-    <SolidColorBrush x:Key="StatusErrorBrush" Color="#D32F2F" />
-    <SolidColorBrush x:Key="StatusInfoBrush" Color="#1E88E5" />
-    <SolidColorBrush x:Key="StatusMutedBrush" Color="#9E9E9E" />
+    <!-- Binding 防止 WPF 冻结画刷，ThemeService 通过 SetCurrentValue 原位更新颜色。 -->
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="{Binding Source=#F3F5F8}" />
+    <SolidColorBrush x:Key="AppSurfaceBrush" Color="{Binding Source=#FFFFFF}" />
+    <SolidColorBrush x:Key="AppForegroundBrush" Color="{Binding Source=#1E293B}" />
+    <SolidColorBrush x:Key="AppMutedBrush" Color="{Binding Source=#64748B}" />
+    <SolidColorBrush x:Key="AppBorderBrush" Color="{Binding Source=#DCE3ED}" />
+    <SolidColorBrush x:Key="AppHoverBrush" Color="{Binding Source=#EAF0F7}" />
+    <SolidColorBrush x:Key="AppSelectionBrush" Color="{Binding Source=#DBEAFE}" />
+    <SolidColorBrush x:Key="AppAccentBrush" Color="{Binding Source=#2563EB}" />
+    <SolidColorBrush x:Key="AppFastestBrush" Color="{Binding Source=#E8F5EE}" />
+    <SolidColorBrush x:Key="StatusSuccessBrush" Color="{Binding Source=#167344}" />
+    <SolidColorBrush x:Key="StatusWarningBrush" Color="{Binding Source=#946000}" />
+    <SolidColorBrush x:Key="StatusErrorBrush" Color="{Binding Source=#C62828}" />
+    <SolidColorBrush x:Key="StatusInfoBrush" Color="{Binding Source=#2563EB}" />
+    <SolidColorBrush x:Key="StatusMutedBrush" Color="{Binding Source=#64748B}" />
+
+    <Style x:Key="AppRaisedButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="8" />
+    </Style>
+    <Style x:Key="AppOutlinedButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="8" />
+    </Style>
+    <Style x:Key="AppComboBox" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="materialDesign:HintAssist.IsFloating" Value="True" />
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+    </Style>
+    <Style x:Key="AppTextBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+        <Setter Property="materialDesign:HintAssist.IsFloating" Value="True" />
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+    </Style>
+    <Style x:Key="AppNavigationItem" TargetType="TabItem">
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="MinWidth" Value="124" />
+        <Setter Property="MinHeight" Value="48" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="NavigationBorder" Background="{TemplateBinding Background}"
+                            BorderBrush="Transparent" BorderThickness="1" CornerRadius="8"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter x:Name="NavigationHeader" ContentSource="Header" VerticalAlignment="Center"
+                                          TextElement.Foreground="{DynamicResource AppMutedBrush}"
+                                          RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource AppSelectionBrush}" />
+                            <Setter TargetName="NavigationHeader" Property="TextElement.Foreground"
+                                    Value="{DynamicResource AppAccentBrush}" />
+                            <Setter TargetName="NavigationHeader" Property="TextElement.FontWeight" Value="SemiBold" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="NavigationBorder" Property="BorderBrush"
+                                    Value="{DynamicResource AppAccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
 </ResourceDictionary>
