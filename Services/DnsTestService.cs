@@ -66,7 +66,8 @@ public class DnsTestService
     }
 
     // 对外：按协议测试
-    public async Task<DnsServer> TestDnsServerAsync(DnsServer server, string testDomain, DnsProtocol protocol)
+    public async Task<DnsServer> TestDnsServerAsync(DnsServer server, string testDomain, DnsProtocol protocol,
+        CancellationToken cancellationToken = default)
     {
         var serverToTest = server;
 
@@ -82,20 +83,30 @@ public class DnsTestService
             {
                 case DnsProtocol.UdpTcp:
                 {
-                    var latency = await EnhancedDnsSpeedTest(serverToTest.PrimaryIP, testDomain);
-                    result = latency.HasValue
-                        ? new TestResult(latency, null, null)
-                        : new TestResult(null, "DNS查询失败或超时", "Timeout");
+                    try
+                    {
+                        var latency = await EnhancedDnsSpeedTest(serverToTest.PrimaryIP, testDomain)
+                            .WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
+                        result = latency.HasValue
+                            ? new TestResult(latency, null, null)
+                            : new TestResult(null, "DNS查询失败或超时", "Timeout");
+                    }
+                    catch (TimeoutException)
+                    {
+                        result = new TestResult(null, "DNS查询超时(>15s)", "Timeout");
+                    }
                     break;
                 }
                 case DnsProtocol.DoH:
-                    result = await WithRetryAsync(ct => MeasureDohLatency(serverToTest, testDomain, ct));
+                    result = await WithRetryAsync(ct => MeasureDohLatency(serverToTest, testDomain, ct),
+                        cancellationToken: cancellationToken);
                     break;
                 case DnsProtocol.DoT:
-                    result = await WithRetryAsync(ct => MeasureDotLatency(serverToTest, testDomain, ct));
+                    result = await WithRetryAsync(ct => MeasureDotLatency(serverToTest, testDomain, ct),
+                        cancellationToken: cancellationToken);
                     break;
                 case DnsProtocol.DoQ:
-                    result = await MeasureDoqLatency(serverToTest, testDomain);
+                    result = await MeasureDoqLatency(serverToTest, testDomain, cancellationToken: cancellationToken);
                     break;
                 default:
                     result = new TestResult(null, "不支持的协议", "Protocol");
@@ -124,6 +135,13 @@ public class DnsTestService
                 serverToTest.Latency = null;
             }
 
+            return serverToTest;
+        }
+        catch (OperationCanceledException)
+        {
+            serverToTest.Status = "已取消";
+            serverToTest.StatusDetail = "测试已取消";
+            serverToTest.Latency = null;
             return serverToTest;
         }
         catch (Exception ex)
@@ -411,17 +429,20 @@ public class DnsTestService
         try
         {
             var qtype = preferredFamily == AddressFamily.InterNetworkV6 ? (ushort)28 : (ushort)1;
-            var query = BuildDnsQuery(hostname, qtype);
+            var txId = (ushort)Random.Shared.Next(1, 65535);
+            var query = BuildDnsQuery(hostname, qtype, txId);
 
             using var udp = new UdpClient();
-            udp.Client.ReceiveTimeout = 3000;
-            udp.Client.SendTimeout = 3000;
             var remoteEp = new IPEndPoint(BootstrapDnsIp, 53);
-            await udp.SendAsync(query, remoteEp, ct);
-            var result = await udp.ReceiveAsync(ct);
+            // ReceiveTimeout/SendTimeout 对异步 ReceiveAsync 无效，改用链接令牌 3s 封顶
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(3));
+            await udp.SendAsync(query, remoteEp, timeoutCts.Token);
+            var result = await udp.ReceiveAsync(timeoutCts.Token);
             var resp = result.Buffer;
 
-            if (resp.Length < 12) return null;
+            // 校验事务 ID 匹配，拒绝长度不足或 ID 不符的响应
+            if (resp.Length < 12 || resp[0] != (byte)(txId >> 8) || resp[1] != (byte)(txId & 0xFF)) return null;
 
             // 跳过 Header(12) + Question section
             var offset = 12;
@@ -653,14 +674,15 @@ public class DnsTestService
     }
 
     private async Task<TestResult> MeasureDoqLatency(DnsServer server, string testDomain,
-        bool checkOnlyConnection = false)
+        bool checkOnlyConnection = false, CancellationToken cancellationToken = default)
     {
         if (!QuicConnection.IsSupported)
             return new TestResult(null, "系统不支持QUIC协议", "NotSupported");
         if (string.IsNullOrWhiteSpace(server.DoqHost))
             return new TestResult(null, "该服务器不支持DoQ协议", "NotSupported");
 
-        using var outerCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var outerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        outerCts.CancelAfter(TimeSpan.FromSeconds(10));
         // 提取 Token 避免在局部函数中捕获 using 变量
         var outerToken = outerCts.Token;
 
@@ -708,7 +730,7 @@ public class DnsTestService
 
                 await using var stream =
                     await conn.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, outerToken);
-                var query = BuildDnsQuery(testDomain, 1);
+                var query = BuildDnsQuery(testDomain, 1, transactionId: 0);
                 var framed = AddTcpLengthPrefix(query);
                 await stream.WriteAsync(framed, outerToken);
                 stream.CompleteWrites();
@@ -767,15 +789,16 @@ public class DnsTestService
     /// </summary>
     /// <param name="domain">要查询的域名。</param>
     /// <param name="qtype">查询类型 (e.g., 1 for A, 28 for AAAA)。</param>
+    /// <param name="transactionId">事务 ID；为 null 时随机生成（DoQ 需按 RFC 9250 固定传 0）。</param>
     /// <returns>包含 DNS 查询的字节数组。</returns>
-    public static byte[] BuildDnsQuery(string domain, ushort qtype)
+    public static byte[] BuildDnsQuery(string domain, ushort qtype, ushort? transactionId = null)
     {
         using var ms = new MemoryStream();
         using var writer = new BinaryWriter(ms);
 
-        // 1. 事务 ID (随机生成)
-        var transactionId = (ushort)Random.Shared.Next(1, 65535);
-        writer.Write(IPAddress.HostToNetworkOrder((short)transactionId));
+        // 1. 事务 ID (未指定时随机生成)
+        var id = transactionId ?? (ushort)Random.Shared.Next(1, 65535);
+        writer.Write(IPAddress.HostToNetworkOrder((short)id));
 
         // 2. 标志位 (标准递归查询)
         // 0... .... .... .... = QR: 0 (Query)

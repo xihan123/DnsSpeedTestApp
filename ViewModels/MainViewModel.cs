@@ -16,12 +16,16 @@ public partial class MainViewModel : ObservableObject
     private readonly DnsSettingService _dnsSettingService = new();
     private readonly DnsTestService _dnsTestService = new();
 
+    // 测速取消令牌
+    private CancellationTokenSource? _testCts;
+
     // Bootstrap DNS
     [ObservableProperty] private string _bootstrapDns = string.Empty;
 
     // 忙碌状态
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopTestCommand))]
     [NotifyCanExecuteChangedFor(nameof(SetDnsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ResetToDhcpCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
@@ -40,7 +44,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
     private string _newDnsName = string.Empty;
 
-    [ObservableProperty] private string _newDohUrl = string.Empty;
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(AddCustomDnsCommand))]
+    private string _newDohUrl = string.Empty;
 
     [ObservableProperty] private string _newDoqHost = string.Empty;
 
@@ -205,6 +210,8 @@ public partial class MainViewModel : ObservableObject
         try
         {
             IsBusy = true;
+            _testCts?.Dispose();
+            _testCts = new CancellationTokenSource();
             TotalCount = DnsServers.Count;
             TestedCount = 0;
             StatusMessage = $"开始测试 DNS 服务器 (协议: {SelectedProtocol}, 域名: {SelectedTestDomain.Domain})...";
@@ -220,7 +227,8 @@ public partial class MainViewModel : ObservableObject
             var tasks = new Dictionary<DnsServer, Task<DnsServer>>();
             foreach (var server in dnsServersList)
             {
-                var task = _dnsTestService.TestDnsServerAsync(server, SelectedTestDomain.Domain, SelectedProtocol);
+                var task = _dnsTestService.TestDnsServerAsync(server, SelectedTestDomain.Domain, SelectedProtocol,
+                    _testCts.Token);
                 tasks.Add(server, task);
             }
 
@@ -236,18 +244,7 @@ public partial class MainViewModel : ObservableObject
 
                 try
                 {
-                    var testedServer = await task;
-
-                    var serverInCollection = DnsServers.FirstOrDefault(s =>
-                        s.Name == testedServer.Name &&
-                        s.PrimaryIP.ToString() == testedServer.PrimaryIP.ToString());
-
-                    if (serverInCollection != null)
-                    {
-                        serverInCollection.Latency = testedServer.Latency;
-                        serverInCollection.Status = testedServer.Status;
-                        serverInCollection.StatusDetail = testedServer.StatusDetail;
-                    }
+                    await task;
                 }
                 catch (Exception ex)
                 {
@@ -275,7 +272,11 @@ public partial class MainViewModel : ObservableObject
                 SelectedDnsServer = DnsServers.FirstOrDefault(s => s.Latency.HasValue);
             });
 
-            StatusMessage = $"DNS 测速完成（协议: {SelectedProtocol}），结果为本机到各 DNS 服务器解析 {SelectedTestDomain.Domain} 的往返延迟";
+            if (_testCts?.IsCancellationRequested == true)
+                StatusMessage = "测速已取消";
+            else
+                StatusMessage =
+                    $"DNS 测速完成（协议: {SelectedProtocol}），结果为本机到各 DNS 服务器解析 {SelectedTestDomain.Domain} 的往返延迟";
         }
         catch (Exception ex)
         {
@@ -284,8 +285,19 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            _testCts?.Dispose();
+            _testCts = null;
         }
     }
+
+    [RelayCommand(CanExecute = nameof(CanStopTest))]
+    private void StopTest()
+    {
+        _testCts?.Cancel();
+        StatusMessage = "正在取消测速...";
+    }
+
+    private bool CanStopTest => IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanSetDns))]
     private async Task SetDns()
@@ -348,7 +360,7 @@ public partial class MainViewModel : ObservableObject
         {
             if (!CanAddCustomDns())
             {
-                StatusMessage = "请输入有效的 DNS 名称和主 DNS 服务器地址";
+                StatusMessage = "请输入有效的 DNS 名称、主 DNS 地址，且 DoH URL（若填写）须为合法的 http/https 地址";
                 return;
             }
 
@@ -414,6 +426,13 @@ public partial class MainViewModel : ObservableObject
     private bool CanAddCustomDns()
     {
         if (string.IsNullOrWhiteSpace(NewDnsName) || string.IsNullOrWhiteSpace(NewPrimaryDns)) return false;
+
+        if (!string.IsNullOrWhiteSpace(NewDohUrl))
+        {
+            if (!Uri.TryCreate(NewDohUrl.Trim(), UriKind.Absolute, out var dohUri) ||
+                (dohUri.Scheme != Uri.UriSchemeHttp && dohUri.Scheme != Uri.UriSchemeHttps))
+                return false;
+        }
 
         try
         {

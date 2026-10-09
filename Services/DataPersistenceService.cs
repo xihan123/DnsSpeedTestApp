@@ -39,8 +39,7 @@ public class DataPersistenceService
         {
             WriteIndented = true,
             PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters = { new IpAddressConverter() }
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
     }
 
@@ -85,7 +84,15 @@ public class DataPersistenceService
 
             // Convert DTOs back to DnsServer objects
             var result = new List<DnsServer>();
-            foreach (var dto in dtoList) result.Add(dto.ToDnsServer());
+            foreach (var dto in dtoList)
+                try
+                {
+                    result.Add(dto.ToDnsServer());
+                }
+                catch (Exception ex)
+                {
+                    LogError($"跳过损坏的自定义 DNS 条目 '{dto?.Name}': {ex.Message}");
+                }
 
             LogInfo($"Loaded {result.Count} custom DNS servers");
             return result;
@@ -236,7 +243,7 @@ public class DataPersistenceService
     {
         var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         var username = Environment.UserName;
-        var logEntry = $"{timestamp} {username}{level}: {message}";
+        var logEntry = $"{timestamp} {username} {level}: {message}";
 
         Debug.WriteLine(logEntry);
 
@@ -244,7 +251,7 @@ public class DataPersistenceService
         {
             ManageLogFileSize();
 
-            using (var fileStream = new FileStream(_logFilePath, FileMode.Append, FileAccess.Write, FileShare.Read))
+            using (var fileStream = new FileStream(_logFilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
             using (var writer = new StreamWriter(fileStream, Encoding.UTF8))
             {
                 writer.WriteLine(logEntry);
