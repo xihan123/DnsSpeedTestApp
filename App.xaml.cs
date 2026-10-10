@@ -32,7 +32,7 @@ public partial class App : Application
         if (e.ExceptionObject is Exception ex)
         {
             LogExceptionToFile(ex);
-            ShowErrorMessage($"发生未处理的异常: {ex.Message}");
+            if (!e.IsTerminating) ShowErrorMessage($"发生未处理的异常: {ex.Message}");
         }
     }
 
@@ -44,9 +44,20 @@ public partial class App : Application
         e.Handled = true;
     }
 
-    private static void ShowErrorMessage(string message)
+    private void ShowErrorMessage(string message)
     {
-        MessageBox.Show(message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        Dispatcher.BeginInvoke(new Action(async () =>
+        {
+            try
+            {
+                await AppDialogService.ShowAsync("错误", message);
+            }
+            catch (Exception ex)
+            {
+                // 窗口尚未加载或正在退出时，保留日志，避免错误弹框再次触发异常。
+                LogExceptionToFile(ex);
+            }
+        }));
     }
 
     private static void LogExceptionToFile(Exception ex)

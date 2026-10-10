@@ -35,6 +35,7 @@ public partial class DnsServer : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LatencyDisplay))]
+    [NotifyPropertyChangedFor(nameof(HasLatency))]
     private int? _latency;
 
     [ObservableProperty]
@@ -49,19 +50,34 @@ public partial class DnsServer : ObservableObject
     private string _statusDetail = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DohDisplay))]
     private string? _dohUrl;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DotDisplay))]
     private string? _dotHost;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DotDisplay))]
     private int _dotPort = 853;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DoqDisplay))]
     private string? _doqHost;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DoqDisplay))]
     private int _doqPort = 853;
 
     public string LatencyDisplay => Latency.HasValue ? $"{Latency.Value} 毫秒" : Status;
+
+    public bool HasLatency => Latency.HasValue;
+
+    public string DohDisplay => string.IsNullOrWhiteSpace(DohUrl) ? NotConfigured : DohUrl;
+
+    public string DotDisplay => string.IsNullOrWhiteSpace(DotHost) ? NotConfigured : $"{DotHost}:{DotPort}";
+
+    public string DoqDisplay => string.IsNullOrWhiteSpace(DoqHost) ? NotConfigured : $"{DoqHost}:{DoqPort}";
+
+    private const string NotConfigured = "—";
 }

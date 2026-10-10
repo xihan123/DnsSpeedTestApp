@@ -8,6 +8,8 @@
     <conv:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibilityConverter" />
     <conv:StatusToBrushConverter x:Key="StatusToBrushConverter" />
     <conv:CapabilitiesConverter x:Key="CapabilitiesConverter" />
+    <conv:ProtocolEndpointConverter x:Key="ProtocolEndpointConverter" />
+    <conv:ProtocolColumnHeaderConverter x:Key="ProtocolColumnHeaderConverter" />
 
     <!-- Binding 防止 WPF 冻结画刷，ThemeService 通过 SetCurrentValue 原位更新颜色。 -->
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="{Binding Source=#F3F5F8}" />
@@ -24,6 +26,27 @@
     <SolidColorBrush x:Key="StatusErrorBrush" Color="{Binding Source=#C62828}" />
     <SolidColorBrush x:Key="StatusInfoBrush" Color="{Binding Source=#2563EB}" />
     <SolidColorBrush x:Key="StatusMutedBrush" Color="{Binding Source=#64748B}" />
+
+    <Style x:Key="AppDataGridCell" TargetType="DataGridCell"
+           BasedOn="{StaticResource MaterialDesignDataGridCell}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center" SnapsToDevicePixels="True" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="Transparent" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 
     <Style x:Key="AppRaisedButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
         <Setter Property="Height" Value="40" />
@@ -50,6 +73,69 @@
         <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
     </Style>
+    <!-- 端点和报告可选中复制。 -->
+    <Style x:Key="AppSelectableText" TargetType="TextBox">
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="IsReadOnlyCaretVisible" Value="True" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource AppAccentBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource AppSelectionBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="IBeam" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <!-- 禁用横向滚动，让长文本换行。 -->
+                    <ScrollViewer x:Name="PART_ContentHost"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  Margin="0" Padding="0"
+                                  Focusable="False"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Disabled" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <DataTemplate x:Key="AppDialogTemplate">
+        <Grid Width="540" Margin="24" Background="{DynamicResource AppSurfaceBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AppForegroundBrush}" TextWrapping="Wrap" />
+            <ScrollViewer Grid.Row="1" MaxHeight="320" Margin="0,16,0,24"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBox Text="{Binding Message, Mode=OneWay}" Style="{StaticResource AppSelectableText}" />
+            </ScrollViewer>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="取消" IsCancel="True" Margin="0,0,12,0"
+                        Command="{x:Static materialDesign:DialogHost.CloseDialogCommand}" CommandParameter="cancel">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource AppOutlinedButton}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsConfirmation}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="{Binding ConfirmText}" IsDefault="True" Style="{StaticResource AppRaisedButton}"
+                        Command="{x:Static materialDesign:DialogHost.CloseDialogCommand}" CommandParameter="confirm" />
+            </StackPanel>
+        </Grid>
+    </DataTemplate>
+
     <Style x:Key="AppNavigationItem" TargetType="TabItem">
         <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
         <Setter Property="Background" Value="Transparent" />

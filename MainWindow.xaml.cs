@@ -1,7 +1,11 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
+using DNSSpeedTester.Models;
 using MaterialDesignThemes.Wpf;
 
 namespace DNSSpeedTester;
@@ -14,6 +18,35 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+    }
+
+    private void RootDialog_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || sender is not DialogHost { IsOpen: true } host) return;
+        host.CurrentSession?.Close("cancel");
+        e.Handled = true;
+    }
+
+    private void DnsServers_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (e.Column.SortMemberPath != nameof(DnsServer.Latency)) return;
+
+        e.Handled = true;
+        var grid = (DataGrid)sender;
+        var direction = e.Column.SortDirection == ListSortDirection.Ascending
+            ? ListSortDirection.Descending
+            : ListSortDirection.Ascending;
+        var view = CollectionViewSource.GetDefaultView(grid.ItemsSource);
+        using (view.DeferRefresh())
+        {
+            view.SortDescriptions.Clear();
+            // 空延迟始终放在末尾。
+            view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.HasLatency), ListSortDirection.Descending));
+            view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.Latency), direction));
+        }
+
+        foreach (var column in grid.Columns) column.SortDirection = null;
+        e.Column.SortDirection = direction;
     }
 
     // 修复无边框窗口 (WindowStyle=None + AllowsTransparency) 最大化时遮挡任务栏、忽略工作区的问题。

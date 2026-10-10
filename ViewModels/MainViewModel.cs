@@ -88,7 +88,14 @@ public partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ResetToDhcpCommand))]
     private NetworkAdapter? _selectedNetworkAdapter;
 
-    [ObservableProperty] private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEndpointColumnVisible))]
+    [NotifyPropertyChangedFor(nameof(IsAddressColumnVisible))]
+    private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
+
+    public bool IsEndpointColumnVisible => SelectedProtocol != DnsProtocol.UdpTcp;
+
+    public bool IsAddressColumnVisible => SelectedProtocol == DnsProtocol.UdpTcp;
 
     [ObservableProperty] private TestDomain? _selectedTestDomain;
 
@@ -483,17 +490,11 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RemoveCustomDns(DnsServer server)
+    private async Task RemoveCustomDns(DnsServer server)
     {
         if (server == null || !server.IsCustom) return;
 
-        var result = MessageBox.Show(
-            $"确定要删除自定义 DNS 服务器 '{server.Name}' 吗？",
-            "删除确认",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (result == MessageBoxResult.Yes)
+        if (await AppDialogService.ConfirmAsync("删除确认", $"确定要删除自定义 DNS 服务器 '{server.Name}' 吗？"))
         {
             var wasSelected = SelectedDnsServer == server;
 
@@ -511,9 +512,17 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RunNetworkDiagnostics()
+    private async Task RunNetworkDiagnosticsAsync()
     {
-        NetworkDiagnostics.RunDiagnostics();
+        try
+        {
+            var report = await Task.Run(NetworkDiagnostics.GetReport);
+            await AppDialogService.ShowAsync("网络适配器诊断", report);
+        }
+        catch (Exception ex)
+        {
+            await AppDialogService.ShowAsync("诊断错误", $"运行诊断时出错: {ex.Message}");
+        }
     }
 
     [RelayCommand]
@@ -522,11 +531,11 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var report = await QuicSelfCheck.RunAsync();
-            MessageBox.Show(report, "自检报告", MessageBoxButton.OK, MessageBoxImage.Information);
+            await AppDialogService.ShowAsync("自检报告", report);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"自检失败: {ex.Message}", "自检报告", MessageBoxButton.OK, MessageBoxImage.Error);
+            await AppDialogService.ShowAsync("自检报告", $"自检失败: {ex.Message}");
         }
     }
 
@@ -592,16 +601,11 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RemoveTestDomain(TestDomain domain)
+    private async Task RemoveTestDomain(TestDomain domain)
     {
         if (domain == null || !domain.IsCustom) return;
 
-        var result = MessageBox.Show(
-            $"确定要删除自定义测试域名 '{domain.Name} [{domain.Domain}]' 吗？",
-            "删除确认", MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (result == MessageBoxResult.Yes)
+        if (await AppDialogService.ConfirmAsync("删除确认", $"确定要删除自定义测试域名 '{domain.Name} [{domain.Domain}]' 吗？"))
         {
             TestDomains.Remove(domain);
             SaveCustomTestDomains();

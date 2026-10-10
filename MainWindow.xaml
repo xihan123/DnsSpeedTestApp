@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:DNSSpeedTester.ViewModels"
+        xmlns:helpers="clr-namespace:DNSSpeedTester.Helpers"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         mc:Ignorable="d"
         Title="DNS 测速与设置工具"
@@ -34,7 +35,14 @@
     <materialDesign:Card Margin="0" Background="{DynamicResource AppBackgroundBrush}"
                          UniformCornerRadius="12"
                          materialDesign:ElevationAssist.Elevation="Dp3">
-        <materialDesign:DialogHost Identifier="RootDialog" CloseOnClickAway="True">
+        <materialDesign:DialogHost Identifier="RootDialog" CloseOnClickAway="False"
+                                   Style="{StaticResource MaterialDesignEmbeddedDialogHost}"
+                                   DialogContentTemplate="{StaticResource AppDialogTemplate}"
+                                   DialogContentUniformCornerRadius="12"
+                                   DialogBackground="{DynamicResource AppSurfaceBrush}"
+                                   PreviewKeyDown="RootDialog_PreviewKeyDown"
+                                   Background="{DynamicResource AppSurfaceBrush}"
+                                   Foreground="{DynamicResource AppForegroundBrush}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -108,6 +116,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <!-- 测试工具条 -->
@@ -200,7 +209,7 @@
                             </StackPanel>
 
                             <!-- DNS 服务器结果表格 -->
-                            <materialDesign:Card Grid.Row="2" Padding="0"
+                            <materialDesign:Card Grid.Row="2" Padding="0" Margin="0,0,0,12"
                                                  Background="{DynamicResource AppSurfaceBrush}"
                                                  materialDesign:ElevationAssist.Elevation="Dp0">
                                 <DataGrid ItemsSource="{Binding DnsServers}"
@@ -216,12 +225,21 @@
                                           CanUserAddRows="False"
                                           CanUserDeleteRows="False"
                                           IsReadOnly="True"
-                                          materialDesign:DataGridAssist.CellPadding="13 8 8 8"
-                                          materialDesign:DataGridAssist.ColumnHeaderPadding="8">
+                                          Sorting="DnsServers_Sorting"
+                                          CellStyle="{StaticResource AppDataGridCell}"
+                                          materialDesign:DataGridAssist.CellPadding="12,0"
+                                          materialDesign:DataGridAssist.ColumnHeaderPadding="12,0">
+                                    <DataGrid.Resources>
+                                        <helpers:BindingProxy x:Key="VmProxy" Data="{Binding}" />
+                                        <SolidColorBrush x:Key="MaterialDesign.Brush.DataGrid.RowHoverBackground"
+                                                         Color="{Binding Color, Source={StaticResource AppHoverBrush}}" />
+                                        <SolidColorBrush x:Key="MaterialDesign.Brush.DataGrid.Selected"
+                                                         Color="{Binding Color, Source={StaticResource AppSelectionBrush}}" />
+                                    </DataGrid.Resources>
                                     <DataGrid.ColumnHeaderStyle>
                                         <Style TargetType="DataGridColumnHeader"
                                                BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
-                                            <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+                                            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
                                             <Setter Property="Foreground" Value="{DynamicResource AppMutedBrush}" />
                                             <Setter Property="FontWeight" Value="SemiBold" />
                                         </Style>
@@ -247,16 +265,13 @@
                                             </Style.Triggers>
                                         </Style>
                                     </DataGrid.RowStyle>
-                                    <DataGrid.CellStyle>
-                                        <Style TargetType="DataGridCell"
-                                               BasedOn="{StaticResource MaterialDesignDataGridCell}">
-                                            <Setter Property="Background" Value="Transparent" />
-                                            <Setter Property="BorderThickness" Value="0" />
-                                            <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
-                                        </Style>
-                                    </DataGrid.CellStyle>
                                     <DataGrid.Columns>
                                         <DataGridTemplateColumn Width="36" IsReadOnly="True">
+                                            <DataGridTemplateColumn.CellStyle>
+                                                <Style TargetType="DataGridCell" BasedOn="{StaticResource AppDataGridCell}">
+                                                    <Setter Property="Padding" Value="0" />
+                                                </Style>
+                                            </DataGridTemplateColumn.CellStyle>
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <materialDesign:PackIcon Kind="Star"
@@ -271,42 +286,152 @@
                                         </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="DNS 服务器名称" Binding="{Binding Name}" Width="*"
                                                             MinWidth="140" />
-                                        <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="130" />
+                                        <!-- UDP/TCP 显示 IP，加密协议显示端点。 -->
+                                        <DataGridTextColumn Header="主 DNS 地址" Binding="{Binding PrimaryIP}" Width="130"
+                                                            Visibility="{Binding Data.IsAddressColumnVisible, Source={StaticResource VmProxy}, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                         <DataGridTextColumn Header="备用 DNS 地址" Binding="{Binding SecondaryIP}"
-                                                            Width="130" />
+                                                            Width="130"
+                                                            Visibility="{Binding Data.IsAddressColumnVisible, Source={StaticResource VmProxy}, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                         <DataGridTextColumn Header="支持协议" Width="120"
                                                             Binding="{Binding Converter={StaticResource CapabilitiesConverter}}" />
+                                        <DataGridTemplateColumn Width="*" MinWidth="150"
+                                                                Header="{Binding Data.SelectedProtocol, Source={StaticResource VmProxy}, Converter={StaticResource ProtocolColumnHeaderConverter}}"
+                                                                Visibility="{Binding Data.IsEndpointColumnVisible, Source={StaticResource VmProxy}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock FontFamily="Consolas" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}">
+                                                        <TextBlock.Text>
+                                                            <MultiBinding
+                                                                Converter="{StaticResource ProtocolEndpointConverter}">
+                                                                <Binding Path="DohDisplay" />
+                                                                <Binding Path="DotDisplay" />
+                                                                <Binding Path="DoqDisplay" />
+                                                                <Binding Path="Data.SelectedProtocol"
+                                                                         Source="{StaticResource VmProxy}" />
+                                                            </MultiBinding>
+                                                        </TextBlock.Text>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="延迟 (ms)"
                                                             Binding="{Binding LatencyDisplay}"
+                                                            SortMemberPath="Latency"
                                                             Width="150">
                                             <DataGridTextColumn.CellStyle>
                                                 <Style TargetType="DataGridCell"
-                                                       BasedOn="{StaticResource MaterialDesignDataGridCell}">
+                                                       BasedOn="{StaticResource AppDataGridCell}">
                                                     <Setter Property="ToolTip" Value="{Binding StatusDetail}" />
-                                                    <Setter Property="Background" Value="Transparent" />
-                                                    <Setter Property="BorderThickness" Value="0" />
                                                     <Setter Property="Foreground"
                                                             Value="{Binding Status, Converter={StaticResource StatusToBrushConverter}}" />
                                                     <Setter Property="FontWeight" Value="SemiBold" />
                                                 </Style>
                                             </DataGridTextColumn.CellStyle>
                                         </DataGridTextColumn>
-                                        <DataGridTemplateColumn Width="Auto">
+                                        <DataGridTemplateColumn Width="48" CanUserSort="False">
+                                            <DataGridTemplateColumn.CellStyle>
+                                                <Style TargetType="DataGridCell" BasedOn="{StaticResource AppDataGridCell}">
+                                                    <Setter Property="Padding" Value="0" />
+                                                </Style>
+                                            </DataGridTemplateColumn.CellStyle>
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <Button Style="{StaticResource MaterialDesignIconButton}"
+                                                            Width="32" Height="32" Padding="4"
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                                             Command="{Binding DataContext.RemoveCustomDnsCommand,
                                                                      RelativeSource={RelativeSource FindAncestor, AncestorType=DataGrid}}"
                                                             CommandParameter="{Binding}"
                                                             ToolTip="删除自定义 DNS"
                                                             Visibility="{Binding IsCustom, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                        <materialDesign:PackIcon Kind="DeleteOutline" />
+                                                        <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
                                                     </Button>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
                                     </DataGrid.Columns>
                                 </DataGrid>
+                            </materialDesign:Card>
+
+                            <!-- 所选服务器的端点详情 -->
+                            <materialDesign:Card Grid.Row="3" Padding="16,12"
+                                                 Background="{DynamicResource AppSurfaceBrush}"
+                                                 materialDesign:ElevationAssist.Elevation="Dp0">
+                                <Grid>
+                                    <TextBlock Text="在上方列表中选择一个 DNS 服务器，可查看其端点地址"
+                                               Foreground="{DynamicResource AppMutedBrush}"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding SelectedDnsServer, Converter={StaticResource NullOrEmptyToVisibilityConverter}, ConverterParameter=Invert}" />
+
+                                    <StackPanel Visibility="{Binding SelectedDnsServer, Converter={StaticResource NullOrEmptyToVisibilityConverter}}">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                            <materialDesign:PackIcon Kind="LinkVariant" VerticalAlignment="Center"
+                                                                     Foreground="{DynamicResource AppAccentBrush}" />
+                                            <TextBlock Text="{Binding SelectedDnsServer.Name}" FontWeight="SemiBold"
+                                                       FontSize="14" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                            <Border BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                                                    CornerRadius="12" Padding="8,1" Margin="12,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{Binding SelectedDnsServer.IsCustom, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="自定义" FontSize="11"
+                                                           Foreground="{DynamicResource AppMutedBrush}" />
+                                            </Border>
+                                            <TextBlock Text="选中文本可 Ctrl+C 复制" FontSize="11" Margin="12,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource AppMutedBrush}" />
+                                        </StackPanel>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" MinWidth="88" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" MinWidth="88" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="主 DNS"
+                                                       Foreground="{DynamicResource AppMutedBrush}" Margin="0,0,12,6"
+                                                       Visibility="{Binding IsAddressColumnVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource AppSelectableText}"
+                                                     Text="{Binding SelectedDnsServer.PrimaryIP, Mode=OneWay}"
+                                                     Margin="0,0,24,6"
+                                                     Visibility="{Binding IsAddressColumnVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="备用 DNS"
+                                                       Foreground="{DynamicResource AppMutedBrush}" Margin="0,0,12,6"
+                                                       Visibility="{Binding IsAddressColumnVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <TextBox Grid.Row="0" Grid.Column="3" Style="{StaticResource AppSelectableText}"
+                                                     Text="{Binding SelectedDnsServer.SecondaryIP, Mode=OneWay, TargetNullValue=—}"
+                                                     Margin="0,0,0,6"
+                                                     Visibility="{Binding IsAddressColumnVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="DoH"
+                                                       Foreground="{DynamicResource AppMutedBrush}" Margin="0,0,12,6" />
+                                            <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
+                                                     Style="{StaticResource AppSelectableText}"
+                                                     Text="{Binding SelectedDnsServer.DohDisplay, Mode=OneWay}"
+                                                     ToolTip="{Binding SelectedDnsServer.DohDisplay}" Margin="0,0,0,6" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="DoT"
+                                                       Foreground="{DynamicResource AppMutedBrush}" Margin="0,0,12,0" />
+                                            <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource AppSelectableText}"
+                                                     Text="{Binding SelectedDnsServer.DotDisplay, Mode=OneWay}"
+                                                     ToolTip="{Binding SelectedDnsServer.DotDisplay}" Margin="0,0,24,0" />
+                                            <TextBlock Grid.Row="2" Grid.Column="2" Text="DoQ"
+                                                       Foreground="{DynamicResource AppMutedBrush}" Margin="0,0,12,0" />
+                                            <TextBox Grid.Row="2" Grid.Column="3" Style="{StaticResource AppSelectableText}"
+                                                     Text="{Binding SelectedDnsServer.DoqDisplay, Mode=OneWay}"
+                                                     ToolTip="{Binding SelectedDnsServer.DoqDisplay}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
                             </materialDesign:Card>
                         </Grid>
                     </TabItem>

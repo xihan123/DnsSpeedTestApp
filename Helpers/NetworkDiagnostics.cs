@@ -1,13 +1,12 @@
 ﻿using System.Management;
 using System.Security.Principal;
 using System.Text;
-using System.Windows;
 
 namespace DNSSpeedTester.Helpers;
 
 public static class NetworkDiagnostics
 {
-    public static void RunDiagnostics()
+    public static string GetReport()
     {
         try
         {
@@ -28,12 +27,11 @@ public static class NetworkDiagnostics
             sb.AppendLine("尝试获取网络适配器信息...");
             GetNetworkAdaptersInfo(sb);
 
-            // 显示诊断信息
-            MessageBox.Show(sb.ToString(), "网络适配器诊断", MessageBoxButton.OK, MessageBoxImage.Information);
+            return sb.ToString();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"运行诊断时出错: {ex.Message}", "诊断错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            return $"运行诊断时出错: {ex.Message}";
         }
     }
 
