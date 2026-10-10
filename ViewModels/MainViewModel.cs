@@ -16,22 +16,8 @@ public partial class MainViewModel : ObservableObject
     private readonly DnsSettingService _dnsSettingService = new();
     private readonly DnsTestService _dnsTestService = new();
 
-    // 测速取消令牌
-    private CancellationTokenSource? _testCts;
-
     // Bootstrap DNS
     [ObservableProperty] private string _bootstrapDns = string.Empty;
-
-    // 主题模式（持久化为字符串："Light" / "Dark" / "System"）
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLightTheme))]
-    [NotifyPropertyChangedFor(nameof(IsDarkTheme))]
-    [NotifyPropertyChangedFor(nameof(IsSystemTheme))]
-    private string _themeMode = nameof(AppThemeMode.System);
-
-    public bool IsLightTheme => ThemeMode == nameof(AppThemeMode.Light);
-    public bool IsDarkTheme => ThemeMode == nameof(AppThemeMode.Dark);
-    public bool IsSystemTheme => ThemeMode == nameof(AppThemeMode.System);
 
     // 忙碌状态
     [ObservableProperty]
@@ -93,17 +79,23 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsAddressColumnVisible))]
     private DnsProtocol _selectedProtocol = DnsProtocol.UdpTcp;
 
-    public bool IsEndpointColumnVisible => SelectedProtocol != DnsProtocol.UdpTcp;
-
-    public bool IsAddressColumnVisible => SelectedProtocol == DnsProtocol.UdpTcp;
-
     [ObservableProperty] private TestDomain? _selectedTestDomain;
 
     // 状态信息
     [ObservableProperty] private string _statusMessage = string.Empty;
 
+    // 测速取消令牌
+    private CancellationTokenSource? _testCts;
+
     // 测试结果
     [ObservableProperty] private int _testedCount;
+
+    // 主题模式（持久化为字符串："Light" / "Dark" / "System"）
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLightTheme))]
+    [NotifyPropertyChangedFor(nameof(IsDarkTheme))]
+    [NotifyPropertyChangedFor(nameof(IsSystemTheme))]
+    private string _themeMode = nameof(AppThemeMode.System);
 
     [ObservableProperty] private int _totalCount;
 
@@ -125,6 +117,14 @@ public partial class MainViewModel : ObservableObject
         LoadData();
     }
 
+    public bool IsLightTheme => ThemeMode == nameof(AppThemeMode.Light);
+    public bool IsDarkTheme => ThemeMode == nameof(AppThemeMode.Dark);
+    public bool IsSystemTheme => ThemeMode == nameof(AppThemeMode.System);
+
+    public bool IsEndpointColumnVisible => SelectedProtocol != DnsProtocol.UdpTcp;
+
+    public bool IsAddressColumnVisible => SelectedProtocol == DnsProtocol.UdpTcp;
+
     // 集合
     public ObservableCollection<DnsServer> DnsServers { get; }
     public ObservableCollection<NetworkAdapter> NetworkAdapters { get; }
@@ -141,6 +141,8 @@ public partial class MainViewModel : ObservableObject
     private bool CanResetToDhcp => !IsBusy && SelectedNetworkAdapter != null;
 
     private bool CanRefreshRandomDomain => !IsBusy;
+
+    private bool CanStopTest => IsBusy;
 
     partial void OnThemeModeChanged(string value)
     {
@@ -241,12 +243,13 @@ public partial class MainViewModel : ObservableObject
             _testCts = new CancellationTokenSource();
             TotalCount = DnsServers.Count;
             TestedCount = 0;
-            StatusMessage = $"开始测试 DNS 服务器 (协议: {SelectedProtocol}, 域名: {SelectedTestDomain.Domain})...";
 
             var dnsServersList = DnsServers.ToList();
 
             // 每轮刷新随机测试域名，避免命中解析器缓存导致测速失真
             RefreshRandomDomain();
+            var testDomain = SelectedTestDomain.Domain;
+            StatusMessage = $"开始测试 DNS 服务器 (协议: {SelectedProtocol}, 域名: {testDomain})...";
 
             foreach (var server in dnsServersList)
             {
@@ -257,7 +260,7 @@ public partial class MainViewModel : ObservableObject
             var tasks = new Dictionary<DnsServer, Task<DnsServer>>();
             foreach (var server in dnsServersList)
             {
-                var task = _dnsTestService.TestDnsServerAsync(server, SelectedTestDomain.Domain, SelectedProtocol,
+                var task = _dnsTestService.TestDnsServerAsync(server, testDomain, SelectedProtocol,
                     _testCts.Token);
                 tasks.Add(server, task);
             }
@@ -310,7 +313,7 @@ public partial class MainViewModel : ObservableObject
                 StatusMessage = "测速已取消";
             else
                 StatusMessage =
-                    $"DNS 测速完成（协议: {SelectedProtocol}），结果为本机到各 DNS 服务器解析 {SelectedTestDomain.Domain} 的往返延迟";
+                    $"DNS 测速完成（协议: {SelectedProtocol}），结果为本机到各 DNS 服务器解析 {testDomain} 的往返延迟";
         }
         catch (Exception ex)
         {
@@ -330,8 +333,6 @@ public partial class MainViewModel : ObservableObject
         _testCts?.Cancel();
         StatusMessage = "正在取消测速...";
     }
-
-    private bool CanStopTest => IsBusy;
 
     [RelayCommand]
     private void SetTheme(string mode)
@@ -628,13 +629,7 @@ public partial class MainViewModel : ObservableObject
                 var randomPart = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 8);
                 var newDomainValue = $"{randomPart}.example.com";
 
-                var index = TestDomains.IndexOf(randomDomain);
-                TestDomains.Remove(randomDomain);
-
-                var newRandomDomain = new TestDomain("随机域名", newDomainValue, "特殊测试");
-                TestDomains.Insert(index, newRandomDomain);
-
-                if (SelectedTestDomain == randomDomain) SelectedTestDomain = newRandomDomain;
+                randomDomain.Domain = newDomainValue;
 
                 StatusMessage = $"已刷新随机测试域名: {newDomainValue}";
             }
